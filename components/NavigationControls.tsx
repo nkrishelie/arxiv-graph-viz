@@ -4,108 +4,90 @@ import { GraphNode } from '../types';
 interface NavigationControlsProps {
   nodes: GraphNode[];
   onNodeSelect: (node: GraphNode) => void;
-  // Фильтры
-  visibleTypes: Set<string>;
-  toggleType: (type: string) => void;
+  // Теперь filters - это набор конкретных категорий
+  activeFilters: Set<string>;
+  toggleFilter: (filter: string) => void;
 }
 
 export const NavigationControls: React.FC<NavigationControlsProps> = ({ 
   nodes, 
   onNodeSelect,
-  visibleTypes,
-  toggleType
+  activeFilters,
+  toggleFilter
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
-  // Ref для клика вне компонента
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Логика поиска (Dropdown)
+  // Логика поиска (без изменений)
   useEffect(() => {
-    if (searchTerm.length < 2) {
-      setSuggestions([]);
-      return;
-    }
+    if (searchTerm.length < 2) { setSuggestions([]); return; }
     const lower = searchTerm.toLowerCase();
-    
-    // Ищем совпадения (максимум 10 штук для скорости)
     const matches = nodes
-      .filter(n => 
-        n.label.toLowerCase().includes(lower) || 
-        (n.authors && n.authors.some(a => a.toLowerCase().includes(lower)))
-      )
+      .filter(n => n.label.toLowerCase().includes(lower))
       .slice(0, 10);
-      
     setSuggestions(matches);
     setShowSuggestions(true);
   }, [searchTerm, nodes]);
 
-  // Выбор из списка
   const handleSelect = (node: GraphNode) => {
     onNodeSelect(node);
-    setSearchTerm(''); // Очистить или оставить node.label - на выбор
+    setSearchTerm('');
     setShowSuggestions(false);
   };
 
+  // Компонент одной галочки
+  const FilterCheckbox = ({ id, label, color }: { id: string, label: string, color: string }) => (
+    <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer hover:text-white mb-1.5">
+      <input 
+        type="checkbox" 
+        checked={activeFilters.has(id)}
+        onChange={() => toggleFilter(id)}
+        className="w-4 h-4 rounded bg-gray-700 border-gray-500 checked:bg-blue-500 appearance-none border checked:border-transparent relative checked:after:content-['✓'] checked:after:absolute checked:after:text-white checked:after:text-xs checked:after:left-[2px] checked:after:top-[-1px]"
+      />
+      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span>
+      {label}
+    </label>
+  );
+
   return (
-    <div className="absolute top-4 left-4 z-50 w-80 flex flex-col gap-4" ref={wrapperRef}>
+    <div className="absolute top-4 left-4 z-50 w-72 flex flex-col gap-3" ref={wrapperRef}>
       
-      {/* 1. ПОИСК */}
+      {/* ПОИСК */}
       <div className="relative">
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search ArXiv (papers, categories)..."
-          className="w-full bg-gray-900/90 border border-blue-500/50 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-blue-400"
+          placeholder="Search..."
+          className="w-full bg-gray-900/90 border border-gray-600 text-white px-3 py-2 rounded text-sm focus:border-blue-500 outline-none"
           onFocus={() => searchTerm.length >= 2 && setShowSuggestions(true)}
         />
-        
-        {/* Выпадающий список */}
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded shadow-2xl max-h-80 overflow-y-auto">
+          <ul className="absolute top-full w-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
             {suggestions.map(node => (
-              <li 
-                key={node.id}
-                onClick={() => handleSelect(node)}
-                className="px-4 py-3 hover:bg-blue-900/50 cursor-pointer border-b border-gray-800 last:border-0"
-              >
-                <div className="text-sm text-gray-200 font-medium">{node.label}</div>
-                <div className="text-xs text-gray-500 mt-1 flex justify-between">
-                  <span>[{node.type}]</span>
-                  <span className="opacity-50">{node.id}</span>
-                </div>
+              <li key={node.id} onClick={() => handleSelect(node)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-xs text-gray-200 border-b border-gray-700/50">
+                {node.label}
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      {/* 2. ФИЛЬТРЫ (Чекбоксы) */}
-      <div className="bg-gray-900/80 backdrop-blur p-4 rounded border border-gray-800">
-        <h4 className="text-gray-400 text-xs font-bold uppercase mb-3">Visible Layers</h4>
+      {/* ФИЛЬТРЫ ПО КАТЕГОРИЯМ */}
+      <div className="bg-gray-900/80 backdrop-blur p-3 rounded border border-gray-800">
+        <h4 className="text-gray-500 text-[10px] font-bold uppercase mb-2 tracking-wider">Categories</h4>
         
-        <label className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white">
-          <input 
-            type="checkbox" 
-            checked={visibleTypes.has('discipline')}
-            onChange={() => toggleType('discipline')}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-500 checked:bg-blue-500"
-          />
-          Categories (Math, CS...)
-        </label>
-
-        <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer hover:text-white">
-          <input 
-            type="checkbox" 
-            checked={visibleTypes.has('article')}
-            onChange={() => toggleType('article')}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-500 checked:bg-blue-500"
-          />
-          Articles
-        </label>
+        <FilterCheckbox id="math" label="Mathematics" color="#3182CE" />
+        <FilterCheckbox id="cs" label="Computer Science" color="#38A169" />
+        <FilterCheckbox id="physics" label="Physics" color="#805AD5" />
+        <FilterCheckbox id="other" label="Other Fields" color="#A0AEC0" />
+        
+        <div className="h-px bg-gray-700 my-2"></div>
+        
+        <h4 className="text-gray-500 text-[10px] font-bold uppercase mb-2 tracking-wider">Content</h4>
+        <FilterCheckbox id="article" label="Articles" color="#FFFFFF" />
       </div>
     </div>
   );
