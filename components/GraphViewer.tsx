@@ -15,16 +15,36 @@ interface GraphViewerProps {
 export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode, maxLinkVal }) => {
   const fgRef = useRef<any>();
 
-  // Настройки физики (чтобы граф не взрывался)
+  // Настройка физики (Динамическая!)
   useEffect(() => {
     if (fgRef.current) {
-      fgRef.current.d3Force('charge').strength(-120);
-      fgRef.current.d3Force('link').distance((link: any) => {
-        // Дисциплины держим подальше друг от друга, статьи поближе
-        return link.type === 'RELATED' ? 100 : 30;
-      });
+      // Проверяем, сколько у нас узлов
+      const nodeCount = data.nodes.length;
+      
+      // Если узлов мало (значит, фильтр статей включен и мы видим только скелет науки)
+      // Включаем МОЩНОЕ отталкивание, чтобы граф занял весь объем экрана
+      const isSkeletonMode = nodeCount < 500; 
+
+      // Сила заряда:
+      // -120 для полного графа (чтобы не разлетелся)
+      // -3000 для скелета (чтобы дисциплины держали дистанцию без статей)
+      const chargeStrength = isSkeletonMode ? -3000 : -120;
+      
+      // Длина пружин (связей):
+      // 60 для полного графа
+      // 200 для скелета (растягиваем связи)
+      const linkDistance = isSkeletonMode ? 200 : 60;
+
+      // Применяем настройки
+      fgRef.current.d3Force('charge').strength(chargeStrength);
+      fgRef.current.d3Force('link').distance(linkDistance);
+      
+      // "Подогреваем" симуляцию, чтобы она применила новые силы
+      if (isSkeletonMode) {
+          fgRef.current.d3ReheatSimulation(); 
+      }
     }
-  }, []);
+  }, [data.nodes.length]); // <-- Пересчитываем физику при изменении числа узлов
 
   // Камера летит к узлу
   useEffect(() => {
