@@ -36,7 +36,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     return CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ФИЗИКА И АВТО-ЗУМ ПРИ ЗАГРУЗКЕ ---
+  // --- ФИЗИКА ---
   useEffect(() => {
     if (fgRef.current) {
       const nodeCount = data.nodes.length;
@@ -52,7 +52,8 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
           fgRef.current.d3ReheatSimulation();
           if (cameraTimer.current) clearTimeout(cameraTimer.current);
           cameraTimer.current = setTimeout(() => {
-              fgRef.current.cameraPosition({ x: 0, y: 0, z: 900 }, { x: 0, y: 0, z: 0 }, 1500);
+              // Авто-отлет для Скелета (далеко)
+              fgRef.current.cameraPosition({ x: 0, y: 0, z: 2500 }, { x: 0, y: 0, z: 0 }, 1500);
           }, 200);
       }
     }
@@ -70,43 +71,40 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
-  // --- УПРАВЛЕНИЕ КАМЕРОЙ ---
-  
+  // --- УПРАВЛЕНИЕ ---
   const handleZoom = (factor: number) => {
     if (!fgRef.current) return;
     const currentPos = fgRef.current.cameraPosition();
     fgRef.current.cameraPosition(
       { x: currentPos.x * factor, y: currentPos.y * factor, z: currentPos.z * factor },
-      currentPos.lookAt, 
-      500
+      currentPos.lookAt, 500
     );
   };
 
   const handleRotate = (angleX: number, angleY: number) => {
     if (!fgRef.current) return;
     const { x, y, z } = fgRef.current.cameraPosition();
-    
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
     const x1 = x * cosY - z * sinY;
     const z1 = x * sinY + z * cosY;
     const y1 = y + angleX * Math.sqrt(x*x + z*z);
-
     fgRef.current.cameraPosition({ x: x1, y: y1, z: z1 }, { x: 0, y: 0, z: 0 }, 500);
   };
 
-  // !!! ИСПРАВЛЕННЫЙ СБРОС !!!
+  // !!! НОВАЯ ЛОГИКА СБРОСА (ОТЛЕТАЕМ ДАЛЕКО) !!!
   const handleReset = () => {
     if (!fgRef.current) return;
     
     const nodeCount = data.nodes.length;
-    // Определяем дистанцию так же, как в useEffect
     const isSkeletonMode = nodeCount < 500; 
-    const zPos = isSkeletonMode ? 900 : 600;
+    
+    // Существенно увеличили дистанцию: 2500 для скелета, 1500 для полного
+    const zPos = isSkeletonMode ? 2500 : 1500;
 
     fgRef.current.cameraPosition(
-        { x: 0, y: 0, z: zPos }, // Далекая позиция
-        { x: 0, y: 0, z: 0 },    // Центр
+        { x: 0, y: 0, z: zPos },
+        { x: 0, y: 0, z: 0 },
         1500
     );
   };
@@ -165,21 +163,35 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
         cooldownTicks={0}
       />
 
-      {/* Панель управления */}
-      <div className="absolute bottom-6 left-6 flex flex-col gap-2 z-50">
-        <div className="flex gap-2 mb-2">
-            <button onClick={() => handleZoom(0.7)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 transition-colors text-xl font-bold" title="Zoom In">+</button>
-            <button onClick={() => handleZoom(1.4)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 transition-colors text-xl font-bold" title="Zoom Out">-</button>
-            <button onClick={handleReset} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-yellow-400 rounded-full flex items-center justify-center border border-gray-600 transition-colors text-lg font-bold" title="Reset Camera">⟳</button>
-        </div>
-        <div className="flex flex-col items-center gap-1 bg-gray-900/50 p-2 rounded-full border border-gray-700/50">
-            <button onClick={() => handleRotate(0.2, 0)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">▲</button>
+      {/* ПАНЕЛЬ УПРАВЛЕНИЯ */}
+      <div className="absolute bottom-6 left-6 flex flex-col gap-4 z-50">
+        
+        {/* 1. Группа Навигации (ТОЛЬКО ДЕСКТОП: hidden md:flex) */}
+        <div className="hidden md:flex flex-col gap-2">
             <div className="flex gap-2">
-                <button onClick={() => handleRotate(0, 0.2)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">◀</button>
-                <button onClick={() => handleRotate(0, -0.2)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">▶</button>
+                <button onClick={() => handleZoom(0.7)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 font-bold" title="Zoom In">+</button>
+                <button onClick={() => handleZoom(1.4)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 font-bold" title="Zoom Out">-</button>
             </div>
-            <button onClick={() => handleRotate(-0.2, 0)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">▼</button>
+            
+            <div className="flex flex-col items-center gap-1 bg-gray-900/50 p-2 rounded-xl border border-gray-700/50">
+                <button onClick={() => handleRotate(0.2, 0)} className="w-8 h-6 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center text-xs">▲</button>
+                <div className="flex gap-2">
+                    <button onClick={() => handleRotate(0, 0.2)} className="w-8 h-6 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center text-xs">◀</button>
+                    <button onClick={() => handleRotate(0, -0.2)} className="w-8 h-6 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center text-xs">▶</button>
+                </div>
+                <button onClick={() => handleRotate(-0.2, 0)} className="w-8 h-6 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center text-xs">▼</button>
+            </div>
         </div>
+
+        {/* 2. Кнопка Reset (ВИДНА ВСЕГДА) */}
+        <button 
+            onClick={handleReset} 
+            className="w-12 h-12 bg-blue-600/90 hover:bg-blue-500 text-white rounded-full flex items-center justify-center border border-blue-400 shadow-lg shadow-blue-900/50 transition-all transform hover:scale-105" 
+            title="Reset View"
+        >
+            ⟳
+        </button>
+
       </div>
     </div>
   );
