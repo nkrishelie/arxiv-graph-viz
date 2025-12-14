@@ -1,54 +1,34 @@
-export enum Discipline {
-  LOGIC = 'Mathematical Logic',
-  SET_THEORY = 'Set Theory',
-  MODEL_THEORY = 'Model Theory',
-  COMPUTABILITY = 'Computability Theory',
-  ALGEBRA = 'General Algebra',
-  PROOF_THEORY = 'Proof Theory',
-  TOPOLOGY = 'Topology',
-  ORDER_THEORY = 'Order Theory & Lattices',
-  //FOUNDATIONS = 'Foundations & Maglish'
-}
+export type NodeType =
+  | 'discipline'           // Основные дисциплины
+  | 'adjacent_discipline'  // Смежные и заглушки
+  | 'article';             // Статьи
 
-// НОВОЕ: Род узла для строгой онтологии
-export enum NodeKind {
-  DISCIPLINE = 'Discipline', // Корневые разделы
-  THEORY = 'Theory',         // Формальные теории (ZFC, PA)
-  STRUCTURE = 'Structure',   // Модели, кольца, поля (N, R, Stone Space)
-  CONCEPT = 'Concept',       // Определения, методы (Идеал, Ранг, Тип)
-  THEOREM = 'Theorem'        // Утверждения, леммы, аксиомы (Цермело, Гёдель)
-}
-
-export enum LinkType {
-  EXTENDS = 'Extends/Generalizes',
-  PROVES = 'Proves/Implies',
-  MODELS = 'Models/Interprets',
-  EQUIVALENT = 'Equivalent To',
-  CONTAINS = 'Contains/Uses',
-  RELATED = 'Related To'
-}
-
-export type Language = 'en' | 'ru';
+export type LinkType =
+  | 'CONTAINS'
+  | 'RELATED'
+  | 'DEPENDS';
 
 export interface GraphNode {
   id: string;
   label: string;
-  group: Discipline;
-  kind?: NodeKind;
-  description: string;
-  details?: string[]; 
-  synonyms?: string[]; 
-  val?: number; 
-  x?: number;
-  y?: number;
-  z?: number;
+  type: NodeType;
+  val: number;
+  // Новые поля:
+  description?: string;
+  cluster?: string;
+  group?: string;
+  primary_category?: string;
+  authors?: string[];
+  url?: string;
+  tags?: string[];
 }
 
 export interface GraphLink {
-  source: string;
-  target: string;
+  source: string | GraphNode;
+  target: string | GraphNode;
   type: LinkType;
   label?: string;
+  val?: number;
 }
 
 export interface GraphData {
