@@ -1,28 +1,27 @@
 export const GRAPH_CONFIG = {
   backgroundColor: '#000011',
   nodeRelSize: 4,
-  linkWidth: 1, // Базовая ширина (будет умножаться на вес)
+  linkWidth: 1,
 };
 
-// Твоя новая палитра
+// Исправленная палитра (Математика = ЖЕЛТЫЙ)
 export const CATEGORY_COLORS: Record<string, string> = {
-  'math':    '#F6E05E', // Насыщенный солнечный желтый
-  'cs':      '#ED8936', // Оранжевый
-  'physics': '#48BB78', // Зеленый
+  'math':    '#FFD700', // <-- SUNNY GOLD (Было #3182CE по ошибке в описании, в коде теперь точно желтый)
+  'cs':      '#ED8936', // Orange
+  'physics': '#48BB78', // Green
   
-  // Детализация физики (все будут зелеными оттенками или можно выделить)
-  'astro':   '#38A169', // Dark Green
-  'cond':    '#2F855A', // Forest Green
-  'gr':      '#68D391', // Light Green
-  'quant':   '#9AE6B4', // Pale Green
+  // Детализация физики (оттенки зеленого/мятного)
+  'astro':   '#38A169', 
+  'cond':    '#2F855A', 
+  'gr':      '#68D391', 
+  'quant':   '#9AE6B4', 
   
   // Остальные
-  'stat':    '#63B3ED', // Blue (Statistics)
-  'eess':    '#A0AEC0', // Gray (Engineering)
-  'other':   '#718096'  // Dark Gray
+  'stat':    '#63B3ED', // Blue
+  'eess':    '#A0AEC0', // Gray
+  'other':   '#718096'
 };
 
-// Человекочитаемые названия для фильтров
 export const CATEGORY_LABELS: Record<string, string> = {
   'math': 'Mathematics',
   'cs': 'Computer Science',
