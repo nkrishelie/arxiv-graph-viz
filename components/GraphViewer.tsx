@@ -51,27 +51,35 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick }) =
   }, []);
 
   // --- ОТРИСОВКА УЗЛОВ (ТЕКСТ И СФЕРЫ) ---
-
-  const nodeThreeObject = useCallback((node: any) => {
+const nodeThreeObject = useCallback((node: any) => {
     const group = new THREE.Group();
 
-    // 1. Сфера (шарик)
-    const geometry = new THREE.SphereGeometry(node.val || 5);
+    // 1. Рисуем сам шар (геометрия)
+    // У статей (article) качество сферы понижаем (8 сегментов), у Категорий - повышаем (16)
+    // Это сильно ускорит рендеринг 1000+ объектов
+    const resolution = node.type === 'article' ? 8 : 16; 
+    const geometry = new THREE.SphereGeometry(node.val || 5, resolution, resolution);
+    
     const material = new THREE.MeshLambertMaterial({ 
       color: getNodeColor(node),
       transparent: true,
-      opacity: 0.9 
+      opacity: 0.8
     });
+    
     const sphere = new THREE.Mesh(geometry, material);
     group.add(sphere);
 
-    // 2. Текст (только для Дисциплин или важных узлов)
-    // Показываем текст, если это категория (discipline/adjacent) или крупная статья
-    if (node.type !== 'article' || (node.val && node.val > 10)) {
+    // 2. ТЕКСТ: Рисуем ТОЛЬКО если это Крупная Категория (не статья)
+    // Это уберет 99% белого шума
+    if (node.type !== 'article' && node.val > 10) {
       const sprite = new SpriteText(node.label);
       sprite.color = 'white';
-      sprite.textHeight = (node.val || 5) * 1.5; // Размер текста зависит от размера узла
-      sprite.position.y = (node.val || 5) + 2;   // Чуть выше шарика
+      sprite.textHeight = (node.val || 5) * 1.5; // Размер шрифта
+      sprite.position.y = (node.val || 5) + 2;   
+      // Убираем просвечивание текста сквозь другие объекты для чистоты
+      sprite.renderOrder = 999; 
+      sprite.material.depthTest = false; 
+      
       group.add(sprite);
     }
 
