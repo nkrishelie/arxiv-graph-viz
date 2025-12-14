@@ -334,3 +334,17 @@ export const GraphViewer: React.FC<Props> = ({ data, onNodeClick, searchQuery, a
     </div>
   );
 };
+
+
+const getNodeColor = (node: any) => {
+  if (node.cluster === 'ADJACENT') return '#9370DB';
+  if (node.cluster === 'OTHER') return '#808080';
+
+  if (node.type === 'article') {
+     if (node.cluster && node.cluster !== 'ADJACENT' && node.cluster !== 'OTHER') {
+        return d3.schemeCategory10[parseInt(node.cluster) % 10] || '#3182CE'; // Или используй d3.scaleOrdinal
+     }
+     return '#A9A9A9';
+  }
+  return '#3182CE'; // Цвет по умолчанию или d3 scale по id
+};
