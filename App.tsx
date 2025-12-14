@@ -4,20 +4,14 @@ import { UIOverlay } from './components/UIOverlay';
 import { NavigationControls } from './components/NavigationControls';
 import { getGraphData } from './services/dataService';
 import { GraphData, GraphNode } from './types';
-import { CATEGORY_COLORS } from './constants'; // Импорт ключей для проверки
+import { CATEGORY_COLORS } from './constants';
 
-// Улучшенная функция определения домена
+// Хелпер определения домена
 const getDomain = (nodeId: string): string => {
   const parts = nodeId.split('.');
-  const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other'; // Если '1805.123' -> other
-  
-  // Проверяем физику
+  const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other';
   if (prefix.includes('ph') || prefix === 'gr' || prefix === 'astro' || prefix === 'cond' || prefix === 'quant') return 'physics';
-  
-  // Проверяем, есть ли такой ключ в наших цветах
   if (CATEGORY_COLORS[prefix]) return prefix;
-  
-  // Если ключа нет (например, q-bio, econ) -> отправляем в other
   return 'other';
 };
 
@@ -27,8 +21,10 @@ const App: React.FC = () => {
   const [neighbors, setNeighbors] = useState<GraphNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
+  
+  // Максимальный вес связи для нормализации цветов
+  const [maxLinkVal, setMaxLinkVal] = useState(1);
 
-  // ПО УМОЛЧАНИЮ: Только Математика и Статьи
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['math', 'article']) 
   );
@@ -36,6 +32,14 @@ const App: React.FC = () => {
   useEffect(() => {
     getGraphData().then((data) => {
       setRawData(data);
+      
+      // Считаем максимум связей (для яркости линий)
+      let maxVal = 0;
+      data.links.forEach(link => {
+        if (link.val && link.val > maxVal) maxVal = link.val;
+      });
+      setMaxLinkVal(maxVal || 1);
+      
       setLoading(false);
     });
   }, []);
@@ -47,34 +51,23 @@ const App: React.FC = () => {
     setActiveFilters(newSet);
   };
 
-  // --- ФИЛЬТРАЦИЯ ---
+  // --- ЛОГИКА ПРОВЕРКИ ВИДИМОСТИ ---
+  const isNodeVisible = (node: GraphNode, filters: Set<string>) => {
+     if (node.type === 'article') return filters.has('article');
+     const domain = getDomain(node.id);
+     if (filters.has('physics')) {
+        if (['astro', 'cond', 'gr', 'quant', 'physics'].includes(domain) || domain.includes('ph')) return true;
+     }
+     return filters.has(domain);
+  };
+
+  // --- ФИЛЬТРАЦИЯ ГРАФА ---
   const filteredData = useMemo(() => {
     if (!rawData) return { nodes: [], links: [] };
     
-    // 1. Узлы
-    const activeNodes = rawData.nodes.filter(n => {
-       // Статьи: проверяем галочку 'article'
-       if (n.type === 'article') {
-         if (!activeFilters.has('article')) return false;
-         // ОПЦИОНАЛЬНО: Показывать статьи, только если их категория включена?
-         // Пока оставим просто вкл/выкл всех статей, как просил.
-         return true; 
-       }
-
-       // Дисциплины: проверяем домен
-       const domain = getDomain(n.id);
-       
-       // Спец-кейсы для физики (так как мы объединили их в physics в фильтре, но в данных они разные)
-       if (activeFilters.has('physics')) {
-          if (['astro', 'cond', 'gr', 'quant', 'physics'].includes(domain) || domain.includes('ph')) return true;
-       }
-
-       return activeFilters.has(domain);
-    });
-
+    const activeNodes = rawData.nodes.filter(n => isNodeVisible(n, activeFilters));
     const activeIds = new Set(activeNodes.map(n => n.id));
 
-    // 2. Связи
     const activeLinks = rawData.links.filter(link => {
        const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
        const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
@@ -89,7 +82,6 @@ const App: React.FC = () => {
     setSelectedNode(node);
     setFocusNode(node);
 
-    // Подсчет соседей
     if (rawData) {
       const relatedIds = new Set<string>();
       rawData.links.forEach(link => {
@@ -98,7 +90,14 @@ const App: React.FC = () => {
         if (sId === node.id) relatedIds.add(tId);
         if (tId === node.id) relatedIds.add(sId);
       });
-      const neighborNodes = rawData.nodes.filter(n => relatedIds.has(n.id));
+      
+      // Фильтруем соседей:
+      // 1. Они должны быть связаны.
+      // 2. Они должны быть разрешены текущими фильтрами (Other не показываем, если выключен).
+      const neighborNodes = rawData.nodes.filter(n => 
+        relatedIds.has(n.id) && isNodeVisible(n, activeFilters)
+      );
+      
       setNeighbors(neighborNodes);
     }
   };
@@ -118,13 +117,14 @@ const App: React.FC = () => {
         data={filteredData}
         onNodeClick={handleNodeSelect}
         focusNode={focusNode}
+        maxLinkVal={maxLinkVal} // Передаем максимум
       />
       
       <UIOverlay 
         selectedNode={selectedNode} 
         neighbors={neighbors}
         onClose={() => setSelectedNode(null)} 
-        onNodeClick={handleNodeSelect} // Передаем обработчик для переходов
+        onNodeClick={handleNodeSelect} 
       />
     </div>
   );
