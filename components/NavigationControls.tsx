@@ -22,10 +22,8 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
-  // Состояние свернутости фильтров
   const [isFiltersOpen, setIsFiltersOpen] = useState(true);
 
-  // Автоматически сворачиваем фильтры на мобильных при загрузке
   useEffect(() => {
     if (window.innerWidth < 768) setIsFiltersOpen(false);
   }, []);
@@ -69,8 +67,8 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
 
   return (
     <>
-      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК (Адаптивная ширина) */}
-      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-80 font-sans">
+      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК */}
+      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-80 font-sans pointer-events-auto">
         <div className="relative">
             <input
                 type="text"
@@ -106,58 +104,73 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
         )}
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ: ФИЛЬТРЫ (Сворачиваемая) */}
-      <div className="absolute top-20 md:top-4 right-4 z-50 flex flex-col items-end gap-2">
+      {/* ПРАВАЯ ПАНЕЛЬ: ФИЛЬТРЫ И СЧЕТЧИК */}
+      {/* Основной контейнер:
+         1. md:h-[calc(100vh-2rem)] - на десктопе занимает всю высоту (минус отступы)
+         2. md:pointer-events-none - пропускает клики сквозь пустое место!
+      */}
+      <div className="absolute top-20 md:top-4 right-4 z-50 flex flex-col items-end gap-2 md:h-[calc(100vh-2rem)] md:pointer-events-none">
         
-        {/* Кнопка Тоггла (Видна всегда, меняет текст) */}
+        {/* Кнопка Тоггла (Мобильная) */}
         <button 
             onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-            className="bg-gray-800/90 border border-gray-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden"
+            className="bg-gray-800/90 border border-gray-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden pointer-events-auto"
         >
             {isFiltersOpen ? 'Hide Filters' : 'Show Filters'}
         </button>
 
-        {/* Контейнер фильтров (Скрывается на мобильных по состоянию) */}
-        <div className={`${isFiltersOpen ? 'flex' : 'hidden'} md:flex flex-col gap-4 w-64 transition-all`}>
+        {/* Контейнер содержимого:
+            1. md:h-full - растягивается на всю высоту родителя
+            2. md:justify-between - разносит фильтры (верх) и счетчик (низ)
+        */}
+        <div className={`${isFiltersOpen ? 'flex' : 'hidden'} md:flex flex-col gap-4 w-64 transition-all md:h-full`}>
             
-            {/* Блок фильтров */}
-            <div className="bg-gray-900/80 backdrop-blur p-4 rounded-lg border border-gray-700 shadow-2xl max-h-[60vh] overflow-y-auto select-none">
-                <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-4">
+            {/* БЛОК ФИЛЬТРОВ 
+               md:flex-1 - занимает всё свободное место, выталкивая счетчик вниз
+               pointer-events-auto - возвращаем кликабельность
+            */}
+            <div className="bg-gray-900/80 backdrop-blur p-4 rounded-lg border border-gray-700 shadow-2xl overflow-hidden flex flex-col pointer-events-auto md:flex-1 max-h-[60vh] md:max-h-none">
+                <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-4 shrink-0">
                     <h4 className="text-yellow-500 text-xs font-bold uppercase tracking-widest">
                     Filters
                     </h4>
-                    {/* Кнопка свернуть для десктопа (опционально) */}
                     <button onClick={() => setIsFiltersOpen(false)} className="md:hidden text-gray-400 hover:text-white">✕</button>
                 </div>
                 
-                <label className="flex items-center gap-3 text-sm text-white mb-4 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors">
-                <input 
-                    type="checkbox" 
-                    checked={activeFilters.has('article')}
-                    onChange={() => toggleFilter('article')}
-                    className="w-4 h-4 accent-white cursor-pointer"
-                />
-                <span className="w-2 h-2 rounded-full bg-white"></span>
-                Show Articles
-                </label>
-
-                {Object.entries(CATEGORY_COLORS).map(([key, color]) => (
-                <label key={key} className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white hover:bg-white/5 p-1 rounded transition-colors">
+                {/* Скроллируемая область списка внутри растянутого блока */}
+                <div className="overflow-y-auto custom-scrollbar flex-1 pr-1">
+                    <label className="flex items-center gap-3 text-sm text-white mb-4 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors">
                     <input 
-                    type="checkbox" 
-                    checked={activeFilters.has(key)}
-                    onChange={() => toggleFilter(key)}
-                    className="w-4 h-4 rounded border-gray-500 cursor-pointer"
-                    style={{ accentColor: color }}
-                />
-                <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></span>
-                {CATEGORY_LABELS[key] || key.toUpperCase()}
-                </label>
-                ))}
+                        type="checkbox" 
+                        checked={activeFilters.has('article')}
+                        onChange={() => toggleFilter('article')}
+                        className="w-4 h-4 accent-white cursor-pointer"
+                    />
+                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                    Show Articles
+                    </label>
+
+                    {Object.entries(CATEGORY_COLORS).map(([key, color]) => (
+                    <label key={key} className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white hover:bg-white/5 p-1 rounded transition-colors">
+                        <input 
+                        type="checkbox" 
+                        checked={activeFilters.has(key)}
+                        onChange={() => toggleFilter(key)}
+                        className="w-4 h-4 rounded border-gray-500 cursor-pointer"
+                        style={{ accentColor: color }}
+                    />
+                    <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></span>
+                    {CATEGORY_LABELS[key] || key.toUpperCase()}
+                    </label>
+                    ))}
+                </div>
             </div>
 
-            {/* Блок статистики */}
-            <div className="bg-gray-900/90 backdrop-blur p-3 rounded-lg border border-gray-700 shadow-xl text-center">
+            {/* БЛОК СТАТИСТИКИ 
+               Прижат к низу за счет flex-1 у блока фильтров выше
+               pointer-events-auto - возвращаем кликабельность
+            */}
+            <div className="bg-gray-900/90 backdrop-blur p-3 rounded-lg border border-gray-700 shadow-xl text-center pointer-events-auto shrink-0">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Visible Nodes</div>
                 <div className="flex justify-around items-center text-sm">
                     <div className="flex flex-col">
