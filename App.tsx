@@ -6,7 +6,6 @@ import { getGraphData } from './services/dataService';
 import { GraphData, GraphNode } from './types';
 import { CATEGORY_COLORS } from './constants';
 
-// Хелпер определения домена
 const getDomain = (nodeId: string): string => {
   const parts = nodeId.split('.');
   const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other';
@@ -18,13 +17,11 @@ const getDomain = (nodeId: string): string => {
 const App: React.FC = () => {
   const [rawData, setRawData] = useState<GraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [neighbors, setNeighbors] = useState<GraphNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
-  
-  // Максимальный вес связи для нормализации цветов
   const [maxLinkVal, setMaxLinkVal] = useState(1);
 
+  // Default: Math + Articles
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['math', 'article']) 
   );
@@ -32,14 +29,10 @@ const App: React.FC = () => {
   useEffect(() => {
     getGraphData().then((data) => {
       setRawData(data);
-      
-      // Считаем максимум связей (для яркости линий)
-      let maxVal = 0;
-      data.links.forEach(link => {
-        if (link.val && link.val > maxVal) maxVal = link.val;
-      });
-      setMaxLinkVal(maxVal || 1);
-      
+      // Считаем максимум для связей
+      let max = 0;
+      data.links.forEach(l => { if ((l.val || 0) > max) max = l.val || 0; });
+      setMaxLinkVal(max || 1);
       setLoading(false);
     });
   }, []);
@@ -51,7 +44,6 @@ const App: React.FC = () => {
     setActiveFilters(newSet);
   };
 
-  // --- ЛОГИКА ПРОВЕРКИ ВИДИМОСТИ ---
   const isNodeVisible = (node: GraphNode, filters: Set<string>) => {
      if (node.type === 'article') return filters.has('article');
      const domain = getDomain(node.id);
@@ -61,7 +53,7 @@ const App: React.FC = () => {
      return filters.has(domain);
   };
 
-  // --- ФИЛЬТРАЦИЯ ГРАФА ---
+  // 1. Фильтрация данных для графа
   const filteredData = useMemo(() => {
     if (!rawData) return { nodes: [], links: [] };
     
@@ -77,32 +69,31 @@ const App: React.FC = () => {
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
-  // --- ВЫБОР УЗЛА ---
+  // 2. Динамический расчет соседей (Зависит от Фильтров!)
+  const neighbors = useMemo(() => {
+    if (!selectedNode || !rawData) return [];
+
+    const relatedIds = new Set<string>();
+    rawData.links.forEach(link => {
+        const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+        const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+        if (sId === selectedNode.id) relatedIds.add(tId);
+        if (tId === selectedNode.id) relatedIds.add(sId);
+    });
+
+    const rawNeighbors = rawData.nodes.filter(n => relatedIds.has(n.id));
+    
+    // Фильтруем соседей теми же правилами, что и граф
+    return rawNeighbors.filter(n => isNodeVisible(n, activeFilters));
+    
+  }, [selectedNode, rawData, activeFilters]);
+
   const handleNodeSelect = (node: GraphNode) => {
     setSelectedNode(node);
     setFocusNode(node);
-
-    if (rawData) {
-      const relatedIds = new Set<string>();
-      rawData.links.forEach(link => {
-        const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
-        const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
-        if (sId === node.id) relatedIds.add(tId);
-        if (tId === node.id) relatedIds.add(sId);
-      });
-      
-      // Фильтруем соседей:
-      // 1. Они должны быть связаны.
-      // 2. Они должны быть разрешены текущими фильтрами (Other не показываем, если выключен).
-      const neighborNodes = rawData.nodes.filter(n => 
-        relatedIds.has(n.id) && isNodeVisible(n, activeFilters)
-      );
-      
-      setNeighbors(neighborNodes);
-    }
   };
 
-  if (loading) return <div className="text-white text-center mt-20">Loading Universe...</div>;
+  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading ArXiv Universe...</div>;
 
   return (
     <div className="relative w-full h-screen bg-[#000011] overflow-hidden">
@@ -117,7 +108,7 @@ const App: React.FC = () => {
         data={filteredData}
         onNodeClick={handleNodeSelect}
         focusNode={focusNode}
-        maxLinkVal={maxLinkVal} // Передаем максимум
+        maxLinkVal={maxLinkVal}
       />
       
       <UIOverlay 
