@@ -6,30 +6,24 @@ import { getGraphData } from './services/dataService';
 import { GraphData, GraphNode } from './types';
 import { CATEGORY_COLORS } from './constants';
 
-// --- НОВАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ КАТЕГОРИИ ---
 const getDomain = (nodeId: string): string => {
   const lowerId = nodeId.toLowerCase();
   
-  // 1. Сначала проверяем спец. разделы физики (они приоритетнее общей физики)
   if (lowerId.includes('quant-ph')) return 'quant-ph';
   if (lowerId.includes('astro-ph')) return 'astro-ph';
   if (lowerId.includes('gr-qc')) return 'gr-qc';
   if (lowerId.includes('cond-mat')) return 'cond-mat';
-  if (lowerId.includes('hep-th') || lowerId.includes('hep-ph') || lowerId.includes('hep-ex')) return 'hep-th';
+  if (lowerId.includes('hep')) return 'hep-th';
 
-  // 2. Проверяем префиксы
   const parts = nodeId.split('.');
-  const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other'; // Если '1805.123' -> другие
+  const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other';
 
   if (prefix === 'math') return 'math';
   if (prefix === 'cs') return 'cs';
   if (prefix === 'stat') return 'stat';
   if (prefix === 'eess') return 'eess';
 
-  // 3. Всё остальное, где есть 'ph' или 'physics' -> Общая физика
   if (prefix === 'physics' || lowerId.includes('ph')) return 'physics';
-
-  // 4. Если есть в словаре цветов (на всякий случай)
   if (CATEGORY_COLORS[prefix]) return prefix;
 
   return 'other';
@@ -42,7 +36,6 @@ const App: React.FC = () => {
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
   const [maxLinkVal, setMaxLinkVal] = useState(1);
 
-  // Default: Math + Articles
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['math', 'article']) 
   );
@@ -64,10 +57,8 @@ const App: React.FC = () => {
     setActiveFilters(newSet);
   };
 
-  // --- ГЛАВНАЯ ФУНКЦИЯ ВИДИМОСТИ ---
   const isNodeVisible = (node: GraphNode, filters: Set<string>) => {
      if (node.type === 'article') return filters.has('article');
-     
      const domain = getDomain(node.id);
      return filters.has(domain);
   };
@@ -87,10 +78,19 @@ const App: React.FC = () => {
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
-  // Соседи (динамически)
+  // НОВОЕ: Считаем статистику для отображения
+  const visibleCounts = useMemo(() => {
+    let disciplines = 0;
+    let articles = 0;
+    filteredData.nodes.forEach(n => {
+        if (n.type === 'article') articles++;
+        else disciplines++;
+    });
+    return { disciplines, articles };
+  }, [filteredData]);
+
   const neighbors = useMemo(() => {
     if (!selectedNode || !rawData) return [];
-
     const relatedIds = new Set<string>();
     rawData.links.forEach(link => {
         const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
@@ -98,7 +98,6 @@ const App: React.FC = () => {
         if (sId === selectedNode.id) relatedIds.add(tId);
         if (tId === selectedNode.id) relatedIds.add(sId);
     });
-
     const rawNeighbors = rawData.nodes.filter(n => relatedIds.has(n.id));
     return rawNeighbors.filter(n => isNodeVisible(n, activeFilters));
   }, [selectedNode, rawData, activeFilters]);
@@ -108,7 +107,7 @@ const App: React.FC = () => {
     setFocusNode(node);
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading ArXiv Universe...</div>;
+  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading...</div>;
 
   return (
     <div className="relative w-full h-screen bg-[#000011] overflow-hidden">
@@ -117,6 +116,7 @@ const App: React.FC = () => {
         onNodeSelect={handleNodeSelect}
         activeFilters={activeFilters}
         toggleFilter={toggleFilter}
+        counts={visibleCounts} // Передаем статистику
       />
 
       <GraphViewer 
