@@ -16,22 +16,28 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
   const fgRef = useRef<any>();
   const cameraTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // --- 1. ЛОГИКА ЦВЕТОВ (ИСПРАВЛЕНА) ---
-  const getNodeColor = useCallback((node: any) => {
-    // Получаем ID или категорию (например "quant-ph" или "math.AG")
+const getNodeColor = useCallback((node: any) => {
     const rawId = node.primary_category || node.id;
-    if (!rawId) return CATEGORY_COLORS['other'];
+    if (!rawId) return '#718096'; // fallback
 
-    // 1. Сначала пробуем точное совпадение (quant-ph, gr-qc)
-    if (CATEGORY_COLORS[rawId]) return CATEGORY_COLORS[rawId];
+    // 1. Статьи - серые (только для компонентов интерфейса, в графе свои правила прозрачности)
+    if (node.type === 'article' && !node.primary_category) return '#A0AEC0';
 
-    // 2. Пробуем префикс до точки (math.AG -> math)
+    const lowerId = rawId.toLowerCase();
+
+    // 2. Спец. категории (Приоритет!)
+    if (lowerId.includes('quant-ph')) return CATEGORY_COLORS['quant-ph'];
+    if (lowerId.includes('astro-ph')) return CATEGORY_COLORS['astro-ph'];
+    if (lowerId.includes('gr-qc')) return CATEGORY_COLORS['gr-qc'];
+    if (lowerId.includes('cond-mat')) return CATEGORY_COLORS['cond-mat'];
+    if (lowerId.includes('hep')) return CATEGORY_COLORS['hep-th'];
+
+    // 3. Префиксы
     const prefix = rawId.split('.')[0];
     if (CATEGORY_COLORS[prefix]) return CATEGORY_COLORS[prefix];
 
-    // 3. Только если ничего не подошло — проверяем на физику по части названия
-    // (Но теперь это не перекроет quant-ph, так как он проверен выше)
-    if (rawId.includes('ph') || prefix.includes('ph')) return CATEGORY_COLORS['physics'];
+    // 4. Общая физика
+    if (lowerId.includes('ph') || prefix === 'physics') return CATEGORY_COLORS['physics'];
 
     return CATEGORY_COLORS['other'];
   }, []);
