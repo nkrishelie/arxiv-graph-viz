@@ -57,28 +57,65 @@ const App: React.FC = () => {
     setActiveFilters(newSet);
   };
 
-  const isNodeVisible = (node: GraphNode, filters: Set<string>) => {
-     if (node.type === 'article') return filters.has('article');
+  // Проверка видимости только для КАТЕГОРИЙ (не статей)
+  const isCategoryVisible = (node: GraphNode, filters: Set<string>) => {
+     if (node.type === 'article') return false; 
      const domain = getDomain(node.id);
      return filters.has(domain);
   };
 
+  // --- УМНАЯ ФИЛЬТРАЦИЯ ---
   const filteredData = useMemo(() => {
     if (!rawData) return { nodes: [], links: [] };
+
+    // 1. Сначала определяем видимые КАТЕГОРИИ (Дисциплины)
+    const visibleCategoryNodes = rawData.nodes.filter(n => isCategoryVisible(n, activeFilters));
+    const visibleCategoryIds = new Set(visibleCategoryNodes.map(n => n.id));
+
+    // 2. Теперь определяем видимые СТАТЬИ
+    // Статья видима, если включен фильтр 'article' И она связана с ЛЮБОЙ видимой категорией
+    const visibleArticleIds = new Set<string>();
     
-    const activeNodes = rawData.nodes.filter(n => isNodeVisible(n, activeFilters));
+    if (activeFilters.has('article')) {
+        rawData.links.forEach(link => {
+            // В библиотеке source/target могут стать объектами после рендера, поэтому проверяем id
+            const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+            const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+            
+            // Если связь типа CONTAINS (Категория -> Статья)
+            // И Категория видима -> Статья становится видимой
+            if (visibleCategoryIds.has(sId) && !visibleCategoryIds.has(tId)) {
+                 // sId - категория, tId - статья (предположительно)
+                 // Дополнительно проверим, что tId это не другая категория
+                 // Но у нас связь CONTAINS идет от Категории к Статье
+                 visibleArticleIds.add(tId);
+            }
+            // На случай обратной связи (редко, но бывает)
+            if (visibleCategoryIds.has(tId) && !visibleCategoryIds.has(sId)) {
+                visibleArticleIds.add(sId);
+            }
+        });
+    }
+
+    // 3. Собираем итоговый список узлов
+    const activeNodes = rawData.nodes.filter(n => {
+        if (n.type !== 'article') return visibleCategoryIds.has(n.id);
+        return visibleArticleIds.has(n.id);
+    });
+
     const activeIds = new Set(activeNodes.map(n => n.id));
 
+    // 4. Фильтруем связи (оба конца должны быть активны)
     const activeLinks = rawData.links.filter(link => {
-       const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
-       const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
-       return activeIds.has(sourceId) && activeIds.has(targetId);
+       const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+       const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+       return activeIds.has(sId) && activeIds.has(tId);
     });
 
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
-  // НОВОЕ: Считаем статистику для отображения
+  // Статистика
   const visibleCounts = useMemo(() => {
     let disciplines = 0;
     let articles = 0;
@@ -89,6 +126,7 @@ const App: React.FC = () => {
     return { disciplines, articles };
   }, [filteredData]);
 
+  // Соседи
   const neighbors = useMemo(() => {
     if (!selectedNode || !rawData) return [];
     const relatedIds = new Set<string>();
@@ -98,9 +136,16 @@ const App: React.FC = () => {
         if (sId === selectedNode.id) relatedIds.add(tId);
         if (tId === selectedNode.id) relatedIds.add(sId);
     });
-    const rawNeighbors = rawData.nodes.filter(n => relatedIds.has(n.id));
-    return rawNeighbors.filter(n => isNodeVisible(n, activeFilters));
-  }, [selectedNode, rawData, activeFilters]);
+    
+    // Соседей тоже фильтруем по той же логике видимости!
+    // Для этого используем activeIds из filteredData, чтобы не дублировать логику
+    // (Но filteredData недоступна здесь напрямую оптимально, поэтому повторим простую проверку)
+    // Или проще: просто вернем тех соседей, которые есть в filteredData.nodes
+    
+    const activeNodesSet = new Set(filteredData.nodes.map(n => n.id));
+    return rawData.nodes.filter(n => relatedIds.has(n.id) && activeNodesSet.has(n.id));
+    
+  }, [selectedNode, rawData, filteredData]);
 
   const handleNodeSelect = (node: GraphNode) => {
     setSelectedNode(node);
@@ -116,7 +161,7 @@ const App: React.FC = () => {
         onNodeSelect={handleNodeSelect}
         activeFilters={activeFilters}
         toggleFilter={toggleFilter}
-        counts={visibleCounts} // Передаем статистику
+        counts={visibleCounts} 
       />
 
       <GraphViewer 
