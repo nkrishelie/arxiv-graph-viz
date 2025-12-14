@@ -15,36 +15,35 @@ interface GraphViewerProps {
 export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode, maxLinkVal }) => {
   const fgRef = useRef<any>();
 
-  // Настройка физики (Динамическая!)
+  // Настройка физики и КАМЕРЫ
   useEffect(() => {
     if (fgRef.current) {
-      // Проверяем, сколько у нас узлов
       const nodeCount = data.nodes.length;
       
-      // Если узлов мало (значит, фильтр статей включен и мы видим только скелет науки)
-      // Включаем МОЩНОЕ отталкивание, чтобы граф занял весь объем экрана
+      // Режим "Скелет" (мало узлов = только категории)
       const isSkeletonMode = nodeCount < 500; 
 
-      // Сила заряда:
-      // -120 для полного графа (чтобы не разлетелся)
-      // -3000 для скелета (чтобы дисциплины держали дистанцию без статей)
+      // 1. ФИЗИКА
       const chargeStrength = isSkeletonMode ? -3000 : -120;
-      
-      // Длина пружин (связей):
-      // 60 для полного графа
-      // 200 для скелета (растягиваем связи)
       const linkDistance = isSkeletonMode ? 200 : 60;
 
-      // Применяем настройки
       fgRef.current.d3Force('charge').strength(chargeStrength);
       fgRef.current.d3Force('link').distance(linkDistance);
       
-      // "Подогреваем" симуляцию, чтобы она применила новые силы
+      // 2. КАМЕРА (Исправление зума)
       if (isSkeletonMode) {
+          // Принудительно отлетаем назад, чтобы увидеть всю структуру
+          fgRef.current.cameraPosition(
+            { x: 0, y: 0, z: 650 }, // Z=650 — это далеко
+            { x: 0, y: 0, z: 0 },   // Смотрим в центр (0,0,0)
+            2000                    // Летим плавно 2 секунды
+          );
+          
+          // Перезапускаем симуляцию, чтобы физика применилась
           fgRef.current.d3ReheatSimulation(); 
       }
     }
-  }, [data.nodes.length]); // <-- Пересчитываем физику при изменении числа узлов
+  }, [data.nodes.length]); // Срабатывает при изменении фильтров
 
   // Камера летит к узлу
   useEffect(() => {
