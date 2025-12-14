@@ -1,89 +1,74 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
-import SpriteText from 'three-spritetext';
-import * as d3 from 'd3';
-
-// Импортируем типы и конфиг
-import { GraphData, GraphNode, GraphLink } from '../types';
-import { GRAPH_CONFIG } from '../constants';
+import { GraphData, GraphNode } from '../types';
+import { GRAPH_CONFIG, CATEGORY_COLORS } from '../constants';
 
 interface GraphViewerProps {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
+  focusNode?: GraphNode | null; // Для фокусировки из поиска
 }
 
-export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick }) => {
+export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode }) => {
   const fgRef = useRef<any>();
 
-  // Генератор цветов для математических дисциплин (радуга)
-  const colorScale = useMemo(() => d3.scaleOrdinal(d3.schemeCategory10), []);
+  // Если из поиска выбрали узел -> летим к нему
+  useEffect(() => {
+    if (focusNode && fgRef.current) {
+      const distance = 150;
+      const distRatio = 1 + distance / Math.hypot(focusNode.x!, focusNode.y!, focusNode.z!);
+      fgRef.current.cameraPosition(
+        { x: focusNode.x! * distRatio, y: focusNode.y! * distRatio, z: focusNode.z! * distRatio },
+        focusNode,
+        2000
+      );
+    }
+  }, [focusNode]);
 
-  // --- ЛОГИКА ЦВЕТОВ (НОВАЯ) ---
-  
+  // --- ЛОГИКА ЦВЕТОВ (ПО ПРЕФИКСУ ID) ---
   const getNodeColor = useCallback((node: any) => {
-    // 1. Смежные науки (Физика, CS)
-    if (node.cluster === 'ADJACENT') return '#9370DB'; // MediumPurple
-    // 2. Заглушка "Other"
-    if (node.cluster === 'OTHER') return '#808080';    // Gray
-
-    // 3. Статьи
-    if (node.type === 'article') {
-       // Если статья привязана к известной дисциплине -> берем её цвет
-       if (node.cluster && node.cluster !== 'ADJACENT' && node.cluster !== 'OTHER') {
-          return colorScale(node.cluster); 
+    // 1. Получаем префикс (math, cs, physics)
+    // ID обычно выглядят как "math.AT" или "1805.12345" (старые статьи без категорий -> other)
+    
+    let prefix = 'other';
+    
+    if (node.primary_category) {
+       prefix = node.primary_category.split('.')[0];
+    } else if (node.id && typeof node.id === 'string') {
+       // Пытаемся угадать из ID
+       if (node.id.includes('/')) return '#718096'; // Старые форматы
+       const parts = node.id.split('.');
+       if (isNaN(Number(parts[0]))) { 
+         prefix = parts[0]; // Если это буквы (math.AG)
        }
-       return '#A9A9A9'; // DarkGray для остальных
     }
 
-    // 4. Дисциплины (Узлы категорий)
-    return colorScale(node.id);
-  }, [colorScale]);
-
-
-  const getLinkColor = useCallback((link: any) => {
-    switch (link.type) {
-      case 'CONTAINS': return 'rgba(255, 255, 255, 0.2)'; // Белый полупрозрачный
-      case 'RELATED':  return 'rgba(255, 165, 0, 0.3)';   // Оранжевый (связи дисциплин)
-      case 'DEPENDS':  return 'rgba(255, 0, 0, 0.4)';     // Красный (цитирования/авторы)
-      default: return 'rgba(255, 255, 255, 0.1)';
-    }
+    // Нормализация для физики (astro-ph -> astro, etc)
+    if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
+    
+    return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ОТРИСОВКА УЗЛОВ (ТЕКСТ И СФЕРЫ) ---
-const nodeThreeObject = useCallback((node: any) => {
-    const group = new THREE.Group();
+  // --- ОБЪЕКТ УЗЛА (БЕЗ ТЕКСТА) ---
+  const nodeThreeObject = useCallback((node: any) => {
+    // 1. Размер зависит от типа
+    let size = 3;
+    if (node.type === 'discipline') size = 12;
+    else if (node.val) size = node.val;
 
-    // 1. Рисуем сам шар (геометрия)
-    // У статей (article) качество сферы понижаем (8 сегментов), у Категорий - повышаем (16)
-    // Это сильно ускорит рендеринг 1000+ объектов
-    const resolution = node.type === 'article' ? 8 : 16; 
-    const geometry = new THREE.SphereGeometry(node.val || 5, resolution, resolution);
+    // 2. Геометрия
+    const resolution = node.type === 'article' ? 8 : 16;
+    const geometry = new THREE.SphereGeometry(size, resolution, resolution);
     
+    // 3. Материал
     const material = new THREE.MeshLambertMaterial({ 
       color: getNodeColor(node),
       transparent: true,
-      opacity: 0.8
+      opacity: node.type === 'article' ? 0.7 : 0.95
     });
-    
-    const sphere = new THREE.Mesh(geometry, material);
-    group.add(sphere);
 
-    // 2. ТЕКСТ: Рисуем ТОЛЬКО если это Крупная Категория (не статья)
-    // Это уберет 99% белого шума
-    if (node.type !== 'article' && node.val > 10) {
-      const sprite = new SpriteText(node.label);
-      sprite.color = 'white';
-      sprite.textHeight = (node.val || 5) * 1.5; // Размер шрифта
-      sprite.position.y = (node.val || 5) + 2;   
-      // Убираем просвечивание текста сквозь другие объекты для чистоты
-      sprite.renderOrder = 999; 
-      sprite.material.depthTest = false; 
-      
-      group.add(sprite);
-    }
-
-    return group;
+    return new THREE.Mesh(geometry, material);
   }, [getNodeColor]);
 
   return (
@@ -91,32 +76,18 @@ const nodeThreeObject = useCallback((node: any) => {
       ref={fgRef}
       graphData={data}
       
-      // Внешний вид
       backgroundColor={GRAPH_CONFIG.backgroundColor}
       showNavInfo={false}
       
       // Узлы
-      nodeLabel="label"
-      nodeRelSize={GRAPH_CONFIG.nodeRelSize}
       nodeThreeObject={nodeThreeObject}
-      nodeColor={getNodeColor}
-      onNodeClick={(node) => {
-        // Камера фокусируется на узле при клике
-        const distance = 100;
-        const distRatio = 1 + distance / Math.hypot(node.x!, node.y!, node.z!);
-        fgRef.current.cameraPosition(
-          { x: node.x! * distRatio, y: node.y! * distRatio, z: node.z! * distRatio },
-          node, 
-          3000 
-        );
-        onNodeClick(node as GraphNode);
-      }}
+      nodeLabel="label" // Показываем название только при наведении мышки (тултип)
+      onNodeClick={onNodeClick}
 
-      // Связи
+      // Связи (Без анимации частиц!)
       linkWidth={GRAPH_CONFIG.linkWidth}
-      linkColor={getLinkColor}
-      linkDirectionalParticles={2} // Бегущие точки по связям
-      linkDirectionalParticleWidth={GRAPH_CONFIG.particleWidth}
+      linkColor={() => 'rgba(255,255,255,0.08)'} // Едва заметные связи
+      linkDirectionalParticles={0} // ОТКЛЮЧЕНА АНИМАЦИЯ
     />
   );
 };
