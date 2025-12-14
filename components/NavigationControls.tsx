@@ -18,14 +18,31 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
 
-  const getNodeColor = (node: GraphNode) => {
-    if (node.type !== 'article') {
-        const prefix = node.id.split('.')[0];
-        if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
-        return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
-    }
-    return '#A0AEC0'; 
-  };
+const getNodeColor = useCallback((node: any) => {
+    const rawId = node.primary_category || node.id;
+    if (!rawId) return '#718096'; // fallback
+
+    // 1. Статьи - серые (только для компонентов интерфейса, в графе свои правила прозрачности)
+    if (node.type === 'article' && !node.primary_category) return '#A0AEC0';
+
+    const lowerId = rawId.toLowerCase();
+
+    // 2. Спец. категории (Приоритет!)
+    if (lowerId.includes('quant-ph')) return CATEGORY_COLORS['quant-ph'];
+    if (lowerId.includes('astro-ph')) return CATEGORY_COLORS['astro-ph'];
+    if (lowerId.includes('gr-qc')) return CATEGORY_COLORS['gr-qc'];
+    if (lowerId.includes('cond-mat')) return CATEGORY_COLORS['cond-mat'];
+    if (lowerId.includes('hep')) return CATEGORY_COLORS['hep-th'];
+
+    // 3. Префиксы
+    const prefix = rawId.split('.')[0];
+    if (CATEGORY_COLORS[prefix]) return CATEGORY_COLORS[prefix];
+
+    // 4. Общая физика
+    if (lowerId.includes('ph') || prefix === 'physics') return CATEGORY_COLORS['physics'];
+
+    return CATEGORY_COLORS['other'];
+  }, []);
 
   useEffect(() => {
     if (searchTerm.length < 2) { setSuggestions([]); return; }
