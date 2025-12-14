@@ -11,7 +11,6 @@ interface NavigationControlsProps {
     disciplines: number;
     articles: number;
   };
-  // НОВЫЙ ПРОП
   onOpenHelp: () => void;
 }
 
@@ -21,7 +20,7 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   activeFilters, 
   toggleFilter,
   counts,
-  onOpenHelp // Получаем функцию открытия
+  onOpenHelp 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
@@ -70,65 +69,65 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
 
   return (
     <>
-      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК */}
-      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-80 font-sans pointer-events-auto">
-        <div className="relative">
+      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК + HELP */}
+      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-96 font-sans pointer-events-auto flex items-start gap-2">
+        
+        {/* Кнопка HELP (Перенесена сюда) */}
+        <button 
+            onClick={onOpenHelp}
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-gray-900/90 border border-yellow-500/50 text-yellow-500 rounded text-xl font-bold shadow-xl hover:bg-yellow-500 hover:text-gray-900 transition-all active:scale-95"
+            title="About / Help"
+        >
+            ?
+        </button>
+
+        {/* Блок Поиска (Растягивается flex-1) */}
+        <div className="relative flex-1">
             <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search..."
-                className="w-full bg-gray-900/90 border border-yellow-500/30 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-yellow-400 focus:bg-gray-900 transition-colors"
+                className="w-full bg-gray-900/90 border border-yellow-500/30 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-yellow-400 focus:bg-gray-900 transition-colors h-12"
             />
-            <span className="absolute right-3 top-3.5 text-gray-500">🔍</span>
-        </div>
+            <span className="absolute right-3 top-3.5 text-gray-500 pointer-events-none">🔍</span>
 
-        {suggestions.length > 0 && (
-          <ul className="mt-2 bg-gray-900 border border-gray-700 rounded shadow-2xl overflow-hidden max-h-[50vh] overflow-y-auto">
-            {suggestions.map(node => (
-              <li 
-                key={node.id} 
-                onClick={() => { onNodeSelect(node); setSearchTerm(''); setSuggestions([]); }}
-                className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 flex items-center gap-3"
-              >
-                <span 
-                    className="w-3 h-3 rounded-full flex-shrink-0 shadow-[0_0_5px_currentColor]" 
-                    style={{ backgroundColor: getNodeColor(node), color: getNodeColor(node) }}
-                ></span>
-                <div className="flex-1 overflow-hidden">
-                    <div className="text-sm text-gray-200 font-medium truncate">{node.label}</div>
-                    <div className="text-xs text-gray-500">
-                        {node.type === 'article' ? 'Paper' : 'Category'}
+            {/* Выпадающий список результатов */}
+            {suggestions.length > 0 && (
+            <ul className="absolute top-14 left-0 w-full bg-gray-900 border border-gray-700 rounded shadow-2xl overflow-hidden max-h-[50vh] overflow-y-auto z-[60]">
+                {suggestions.map(node => (
+                <li 
+                    key={node.id} 
+                    onClick={() => { onNodeSelect(node); setSearchTerm(''); setSuggestions([]); }}
+                    className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 flex items-center gap-3 last:border-0"
+                >
+                    <span 
+                        className="w-3 h-3 rounded-full flex-shrink-0 shadow-[0_0_5px_currentColor]" 
+                        style={{ backgroundColor: getNodeColor(node), color: getNodeColor(node) }}
+                    ></span>
+                    <div className="flex-1 overflow-hidden">
+                        <div className="text-sm text-gray-200 font-medium truncate">{node.label}</div>
+                        <div className="text-xs text-gray-500">
+                            {node.type === 'article' ? 'Paper' : 'Category'}
+                        </div>
                     </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                </li>
+                ))}
+            </ul>
+            )}
+        </div>
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ */}
+      {/* ПРАВАЯ ПАНЕЛЬ: ТОЛЬКО ФИЛЬТРЫ */}
       <div className="absolute top-20 md:top-4 right-4 z-50 flex flex-col items-end gap-2 md:h-[calc(100vh-2rem)] md:pointer-events-none">
         
-        {/* Кнопки управления (Тоггл + Help) */}
-        <div className="flex gap-2 pointer-events-auto">
-            {/* Кнопка HELP (Круглая) */}
-            <button 
-                onClick={onOpenHelp}
-                className="w-8 h-8 flex items-center justify-center bg-gray-800/90 border border-gray-600 text-yellow-500 rounded-full font-bold shadow-lg hover:bg-gray-700 hover:text-white transition-colors"
-                title="About / Help"
-            >
-                ?
-            </button>
-            
-            {/* Кнопка ТОГГЛ (Мобильная) */}
-            <button 
-                onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                className="bg-gray-800/90 border border-gray-600 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden"
-            >
-                {isFiltersOpen ? 'Hide' : 'Filters'}
-            </button>
-        </div>
+        {/* Кнопка ТОГГЛ (Мобильная) - теперь одна */}
+        <button 
+            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+            className="bg-gray-800/90 border border-gray-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden pointer-events-auto"
+        >
+            {isFiltersOpen ? 'Hide Filters' : 'Show Filters'}
+        </button>
 
         <div className={`${isFiltersOpen ? 'flex' : 'hidden'} md:flex flex-col gap-4 w-64 transition-all md:h-full`}>
             
