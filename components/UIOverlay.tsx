@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Latex from 'react-latex-next';
 import { GraphNode } from '../types';
-import { CATEGORY_COLORS } from '../constants'; // Импортируем палитру
+import { CATEGORY_COLORS } from '../constants';
 
 interface UIOverlayProps {
   selectedNode: GraphNode | null;
@@ -16,13 +16,13 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   onClose,
   onNodeClick
 }) => {
+  // Логика перетаскивания
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // --- ПОЛУЧЕНИЕ ЦВЕТА УЗЛА ---
+  // Получаем цвет узла для заголовка
   const getNodeColor = (node: GraphNode) => {
-    // Та же логика, что и в графе (можно вынести в util.ts, но пока тут)
     let prefix = 'other';
     if (node.primary_category) prefix = node.primary_category.split('.')[0];
     else if (node.id) {
@@ -44,6 +44,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
       setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
     };
     const handleMouseUp = () => setIsDragging(false);
+    
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
@@ -56,12 +57,11 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
   if (!selectedNode) return null;
 
-  // Цвет текущего узла
   const headerColor = getNodeColor(selectedNode);
   
-  // Соседи (только дисциплины)
+  // Показываем в списке только дисциплины!
   const relatedDisciplines = neighbors.filter(
-    n => n.type === 'discipline' || n.type === 'adjacent_discipline'
+    n => n.type !== 'article'
   );
 
   return (
@@ -71,22 +71,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
         right: '320px', 
         top: '20px', 
         transform: `translate(${position.x}px, ${position.y}px)`,
-        boxShadow: `0 0 20px ${headerColor}40` // Легкая подсветка цветом дисциплины
+        boxShadow: `0 0 20px ${headerColor}20`
       }}
     >
-      {/* ЗАГОЛОВОК (С динамическим цветом) */}
+      {/* DRAG HEADER */}
       <div 
         onMouseDown={handleMouseDown}
-        className="p-4 border-b border-gray-700 cursor-move bg-gray-800/50 rounded-t-lg flex justify-between items-start"
+        className="p-4 border-b border-gray-700 cursor-move bg-gray-800/50 rounded-t-lg flex justify-between items-start select-none"
       >
         <div>
             <h2 
-              className="text-lg font-bold leading-tight select-none pointer-events-none"
-              style={{ color: headerColor }} // <-- ЦВЕТ ЗАГОЛОВКА
+              className="text-lg font-bold leading-tight pointer-events-none"
+              style={{ color: headerColor }}
             >
                 <Latex>{selectedNode.label}</Latex>
             </h2>
-            <div className="text-xs text-gray-500 font-mono mt-1 select-none pointer-events-none">{selectedNode.id}</div>
+            <div className="text-xs text-gray-500 font-mono mt-1 pointer-events-none">{selectedNode.id}</div>
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-white ml-4 p-1">✕</button>
       </div>
@@ -105,7 +105,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             </div>
         )}
 
-        {/* RELATED TOPICS */}
+        {/* СПИСОК СОСЕДЕЙ */}
         {relatedDisciplines.length > 0 && (
             <div className="mt-4 border-t border-gray-800 pt-4">
             <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
@@ -113,24 +113,21 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             </h3>
             <ul className="space-y-2">
                 {relatedDisciplines.map(n => {
-                  const nodeColor = getNodeColor(n); // Цвет соседа
+                  const nodeColor = getNodeColor(n);
                   return (
                     <li 
                         key={n.id} 
                         onClick={() => onNodeClick(n)}
                         className="text-sm bg-gray-800/40 hover:bg-white/5 border border-transparent p-2 rounded flex items-center gap-3 cursor-pointer transition-all group"
-                        style={{ borderColor: `${nodeColor}30` }} // Рамка цвета узла (прозрачная)
                     >
-                        {/* Цветной шарик соседа */}
+                        {/* Цветной шарик */}
                         <span 
-                          className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]"
+                          className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] flex-shrink-0"
                           style={{ backgroundColor: nodeColor, color: nodeColor }}
                         ></span>
                         
-                        <span 
-                          className="truncate font-medium group-hover:text-white transition-colors"
-                          style={{ color: nodeColor }} // Текст цвета узла
-                        >
+                        {/* Обычный текст */}
+                        <span className="truncate font-medium text-gray-300 group-hover:text-white transition-colors">
                           <Latex>{n.label}</Latex>
                         </span>
                     </li>
