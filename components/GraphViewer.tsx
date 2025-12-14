@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import SpriteText from 'three-spritetext';
@@ -9,45 +9,55 @@ interface GraphViewerProps {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
   focusNode?: GraphNode | null;
-  maxLinkVal: number; // Максимальный вес связи в графе
+  maxLinkVal: number;
 }
 
 export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode, maxLinkVal }) => {
   const fgRef = useRef<any>();
+  // Таймер для предотвращения конфликтов камеры
+  const cameraTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Настройка физики и КАМЕРЫ
+  // --- НАСТРОЙКА ФИЗИКИ И КАМЕРЫ ---
   useEffect(() => {
     if (fgRef.current) {
       const nodeCount = data.nodes.length;
-      
-      // Режим "Скелет" (мало узлов = только категории)
+      // Режим "Скелет" (если статей нет, узлов мало)
       const isSkeletonMode = nodeCount < 500; 
 
-      // 1. ФИЗИКА
+      // 1. ФИЗИКА (Расталкиваем узлы, если их мало)
       const chargeStrength = isSkeletonMode ? -3000 : -120;
       const linkDistance = isSkeletonMode ? 200 : 60;
 
       fgRef.current.d3Force('charge').strength(chargeStrength);
       fgRef.current.d3Force('link').distance(linkDistance);
       
-      // 2. КАМЕРА (Исправление зума)
+      // Перезапускаем "печку" физики
       if (isSkeletonMode) {
-          // Принудительно отлетаем назад, чтобы увидеть всю структуру
-          fgRef.current.cameraPosition(
-            { x: 0, y: 0, z: 650 }, // Z=650 — это далеко
-            { x: 0, y: 0, z: 0 },   // Смотрим в центр (0,0,0)
-            2000                    // Летим плавно 2 секунды
-          );
+          fgRef.current.d3ReheatSimulation();
+      }
+
+      // 2. КАМЕРА (С ЗАДЕРЖКОЙ, ЧТОБЫ ПЕРЕБИТЬ AUTO-ZOOM)
+      if (isSkeletonMode) {
+          if (cameraTimer.current) clearTimeout(cameraTimer.current);
           
-          // Перезапускаем симуляцию, чтобы физика применилась
-          fgRef.current.d3ReheatSimulation(); 
+          cameraTimer.current = setTimeout(() => {
+              // Принудительно отлетаем далеко назад (z: 900)
+              fgRef.current.cameraPosition(
+                { x: 0, y: 0, z: 900 }, 
+                { x: 0, y: 0, z: 0 },   
+                1500 // Плавный отлет за 1.5 сек
+              );
+          }, 200); // Ждем 200мс, пока библиотека закончит свои дела
       }
     }
-  }, [data.nodes.length]); // Срабатывает при изменении фильтров
+  }, [data]); // <-- Срабатывает каждый раз, когда меняются данные (фильтры)
 
-  // Камера летит к узлу
+  // --- ФОКУС ПРИ ПОИСКЕ (Игнорируем скелетный режим) ---
   useEffect(() => {
     if (focusNode && fgRef.current) {
+      // Если пользователь что-то ищет, отменяем отлет камеры
+      if (cameraTimer.current) clearTimeout(cameraTimer.current);
+
       const distance = 80;
       const distRatio = 1 + distance / Math.hypot(focusNode.x!, focusNode.y!, focusNode.z!);
       fgRef.current.cameraPosition(
@@ -58,30 +68,23 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
-  // --- ЦВЕТА УЗЛОВ ---
+  // --- ЦВЕТА И ОБЪЕКТЫ (ОСТАЛОСЬ БЕЗ ИЗМЕНЕНИЙ) ---
   const getNodeColor = useCallback((node: any) => {
     let prefix = 'other';
-    // Пытаемся понять категорию по ID или primary_category
     const rawId = node.primary_category || node.id;
-    
     if (rawId) {
         const parts = rawId.split('.');
-        if (isNaN(Number(parts[0]))) prefix = parts[0]; // math, cs, physics...
+        if (isNaN(Number(parts[0]))) prefix = parts[0];
     }
-    
     if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
     return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ОБЪЕКТЫ (СФЕРЫ + ТЕКСТ) ---
   const nodeThreeObject = useCallback((node: any) => {
     const group = new THREE.Group();
     const color = getNodeColor(node);
-    
-    // Размер: Дисциплины большие (10), Статьи маленькие (2)
     const size = (node.type === 'discipline' || node.type === 'adjacent_discipline') ? 10 : 2;
     
-    // Сфера
     const geometry = new THREE.SphereGeometry(size, 16, 16);
     const material = new THREE.MeshLambertMaterial({ 
       color: color,
@@ -90,48 +93,28 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     });
     group.add(new THREE.Mesh(geometry, material));
 
-    // Текст (ТОЛЬКО для Дисциплин)
     if (node.type !== 'article') {
       const sprite = new SpriteText(node.label);
-      sprite.color = color; // Цвет текста = цвет категории
+      sprite.color = color;
       sprite.textHeight = 12; 
       sprite.position.y = size + 5; 
       group.add(sprite);
     }
-
     return group;
   }, [getNodeColor]);
 
-  // --- ВИЗУАЛИЗАЦИЯ СВЯЗЕЙ (САМОЕ ВАЖНОЕ) ---
-  
-  // 1. Цвет связи
   const getLinkColor = useCallback((link: any) => {
-    // Если это связь Статья-Дисциплина -> очень тусклая серая
     if (link.type === 'CONTAINS') return 'rgba(100, 100, 100, 0.1)';
-
-    // Если это связь Дисциплина-Дисциплина (RELATED)
-    const val = link.val || 0;
     
-    // Считаем интенсивность относительно максимума (но не линейно, чтобы средние связи тоже было видно)
-    // Используем корень, чтобы сгладить разницу между 10 и 1000
-    const intensity = Math.min(Math.sqrt(val) / Math.sqrt(maxLinkVal || 1), 1);
-    
-    // Чем сильнее связь, тем она ЯРЧЕ (белее) и непрозрачнее
-    // Слабая (1 статья) = тусклая (0.15)
-    // Сильная = Яркая белая (0.8)
+    const intensity = Math.min(Math.sqrt(link.val || 0) / Math.sqrt(maxLinkVal || 1), 1);
     const opacity = 0.15 + (intensity * 0.65);
-    const brightness = Math.floor(100 + (155 * intensity)); // от 100 до 255
+    const brightness = Math.floor(100 + (155 * intensity));
     
     return `rgba(${brightness}, ${brightness}, ${brightness}, ${opacity})`;
   }, [maxLinkVal]);
 
-  // 2. Толщина связи
   const getLinkWidth = useCallback((link: any) => {
-    if (link.type === 'CONTAINS') return 0.2; // Ниточка
-
-    // Для дисциплин: логарифмическая или корневая зависимость
-    // 1 статья -> 0.5
-    // 100 статей -> ~3
+    if (link.type === 'CONTAINS') return 0.2;
     return Math.max(0.5, Math.sqrt(link.val || 1) * 0.3); 
   }, []);
 
@@ -141,21 +124,16 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
       graphData={data}
       backgroundColor={GRAPH_CONFIG.backgroundColor}
       showNavInfo={false}
-      
       nodeThreeObject={nodeThreeObject}
       nodeLabel="label"
       onNodeClick={onNodeClick}
-
-      // СВЯЗИ
       linkColor={getLinkColor}
       linkWidth={getLinkWidth}
-      linkLabel={(link: any) => {
-          if (link.type === 'RELATED') return `Shared Articles: ${link.val}`;
-          return '';
-      }}
-      
-      // Чтобы связи выглядели как лучи света
-      linkResolution={6} 
+      linkLabel={(link: any) => link.type === 'RELATED' ? `Shared Articles: ${link.val}` : ''}
+      linkResolution={6}
+      // Warmup чуть дольше, чтобы физика успела отработать до рендера
+      warmupTicks={50} 
+      cooldownTicks={0}
     />
   );
 };
