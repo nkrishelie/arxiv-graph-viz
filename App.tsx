@@ -1,132 +1,81 @@
-import { WelcomeModal } from './components/WelcomeModal';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GraphViewer } from './components/GraphViewer';
 import { UIOverlay } from './components/UIOverlay';
+import { WelcomeModal } from './components/WelcomeModal'; // Вернули импорт
 import { getGraphData } from './services/dataService';
-import { GraphNode, GraphData, Language, Discipline, NodeKind } from './types';
+import { GraphData, GraphNode } from './types';
 
 const App: React.FC = () => {
-  const [language, setLanguage] = useState<Language>('en');
-  
-  const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-
+  const [data, setData] = useState<GraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showWelcome, setShowWelcome] = useState(true);
+  
+  // Состояния загрузки и ошибок
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Состояние Тура (по умолчанию true, чтобы он появлялся при старте)
+  const [showTour, setShowTour] = useState(true);
 
   useEffect(() => {
-    setIsDataLoaded(false);
-    
-    const timer = setTimeout(() => {
-      const graphData = getGraphData(language);
-      setData(graphData);
-      setIsDataLoaded(true);
-    }, 50);
+    getGraphData()
+      .then((graphData) => {
+        if (!graphData || !graphData.nodes || !Array.isArray(graphData.nodes)) {
+          throw new Error("Invalid graph data structure");
+        }
+        setData(graphData);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load graph data:", err);
+        setError("Failed to load data.");
+        setLoading(false);
+      });
+  }, []);
 
-    return () => clearTimeout(timer);
-  }, [language]);
-
-  const handleNodeClick = (node: GraphNode) => {
+  const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
-  };
+  }, []);
 
-  const handleBackgroundClick = () => {
-    if(selectedNode) setSelectedNode(null);
-  };
+  const handleCloseOverlay = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
 
-  // === Состояние фильтрации ===
-  const [hiddenGroups, setHiddenGroups] = useState<Set<Discipline>>(new Set());
-  const [hiddenKinds, setHiddenKinds] = useState<Set<NodeKind>>(new Set()); // <-- Новое состояние
+  // Если ошибка
+  if (error) {
+    return <div className="flex justify-center items-center h-screen bg-black text-red-500">{error}</div>;
+  }
 
-  const toggleGroup = (group: Discipline) => {
-    const newHidden = new Set(hiddenGroups);
-    if (newHidden.has(group)) {
-      newHidden.delete(group);
-    } else {
-      newHidden.add(group);
-    }
-    setHiddenGroups(newHidden);
-  };
+  // Если загрузка
+  if (loading || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#000011] text-blue-400">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p>Loading ArXiv Universe...</p>
+      </div>
+    );
+  }
 
-  // <-- Новая функция переключения Kind
-  const toggleKind = (kind: NodeKind) => {
-    const newHidden = new Set(hiddenKinds);
-    if (newHidden.has(kind)) {
-      newHidden.delete(kind);
-    } else {
-      newHidden.add(kind);
-    }
-    setHiddenKinds(newHidden);
-  };
-
-  const visibleData = useMemo(() => {
-    // 1. Фильтруем узлы по Группе И по Типу (Kind)
-    const visibleNodes = data.nodes.filter(n => {
-      const groupHidden = hiddenGroups.has(n.group);
-      // Если у узла нет kind, считаем его видимым по этому критерию, либо скрываем, если логика требует строгости
-      // Здесь предполагаем: если kind есть и он в скрытых -> скрыть.
-      const kindHidden = n.kind ? hiddenKinds.has(n.kind) : false; 
-      
-      return !groupHidden && !kindHidden;
-    });
-
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-
-    // 2. Фильтруем связи
-    const visibleLinks = data.links.filter(l => {
-      const sourceId = typeof l.source === 'object' ? (l.source as any).id : l.source;
-      const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
-      
-      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
-    });
-
-    return { nodes: visibleNodes, links: visibleLinks };
-  }, [data, hiddenGroups, hiddenKinds]); // <-- Добавили hiddenKinds в зависимости
-
+  // Основной рендер
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
-      {showWelcome && (
+    <div className="relative w-full h-screen bg-[#000011] overflow-hidden">
+      {/* 1. ГРАФ (Рисуем только когда есть данные) */}
+      <GraphViewer 
+        data={data} 
+        onNodeClick={handleNodeClick} 
+      />
+      
+      {/* 2. ИНТЕРФЕЙС (Панель справа) */}
+      <UIOverlay 
+        selectedNode={selectedNode} 
+        onClose={handleCloseOverlay} 
+      />
+
+      {/* 3. ТУР (Модальное окно поверх всего) */}
+      {showTour && (
         <WelcomeModal 
-          onStart={() => setShowWelcome(false)}
-          currentLang={language}
-          onToggleLang={setLanguage}
+          onClose={() => setShowTour(false)} 
         />
       )}
-
-      <div className="absolute inset-0 z-0" onClick={handleBackgroundClick}>
-        <GraphViewer 
-          data={visibleData}
-          onNodeClick={handleNodeClick} 
-          searchQuery={searchQuery}
-          activeLanguage={language}
-        />
-      </div>
-
-      <div className="absolute inset-0 z-10 pointer-events-none">
-        <UIOverlay 
-          nodes={data.nodes} 
-          links={data.links}
-          selectedNode={selectedNode} 
-          onSearch={(query) => {
-            setSearchQuery(query);
-            const foundNode = data.nodes.find(n => n.id === query);
-            if (foundNode) setSelectedNode(foundNode);
-          }}
-          
-          // Props для групп
-          hiddenGroups={hiddenGroups}
-          onToggleGroup={toggleGroup}
-
-          // Props для видов (Kind) <-- Передаем новые пропсы
-          hiddenKinds={hiddenKinds}
-          onToggleKind={toggleKind}
-
-          onCloseSidebar={() => setSelectedNode(null)}
-          currentLang={language}
-          onToggleLang={(lang) => setLanguage(lang)}
-        />
-      </div>
     </div>
   );
 };
