@@ -43,7 +43,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
           cameraTimer.current = setTimeout(() => {
               // Принудительно отлетаем далеко назад (z: 900)
               fgRef.current.cameraPosition(
-                { x: 0, y: 0, z: 900 }, 
+                { x: 0, y: 0, z: 1500 }, 
                 { x: 0, y: 0, z: 0 },   
                 1500 // Плавный отлет за 1.5 сек
               );
