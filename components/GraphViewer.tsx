@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useEffect } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
-import * as d3 from 'd3'; // Убедись, что d3 установлен (npm install d3)
+import SpriteText from 'three-spritetext';
 import { GraphData, GraphNode } from '../types';
 import { GRAPH_CONFIG, CATEGORY_COLORS } from '../constants';
 
@@ -14,20 +14,17 @@ interface GraphViewerProps {
 export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode }) => {
   const fgRef = useRef<any>();
 
-  // Настройка физики (раздвигаем узлы)
   useEffect(() => {
     if (fgRef.current) {
-      // Увеличиваем силу отталкивания (Charge), чтобы шары не слипались
-      fgRef.current.d3Force('charge').strength(-120); 
-      // Добавляем немного трения, чтобы граф не "дрожал"
-      fgRef.current.d3Force('link').distance(50); 
+      // Физика: сильное отталкивание, чтобы текст не слипался
+      fgRef.current.d3Force('charge').strength(-150);
+      fgRef.current.d3Force('link').distance(60);
     }
   }, []);
 
-  // Фокус камеры при поиске
   useEffect(() => {
     if (focusNode && fgRef.current) {
-      const distance = 100; // Подлетаем ближе
+      const distance = 80;
       const distRatio = 1 + distance / Math.hypot(focusNode.x!, focusNode.y!, focusNode.z!);
       fgRef.current.cameraPosition(
         { x: focusNode.x! * distRatio, y: focusNode.y! * distRatio, z: focusNode.z! * distRatio },
@@ -37,45 +34,49 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
-  // --- ЦВЕТА ---
+  // --- ПОЛУЧЕНИЕ ЦВЕТА ---
   const getNodeColor = useCallback((node: any) => {
     let prefix = 'other';
-    
-    // Определяем префикс (math, cs, physics...)
-    if (node.primary_category) {
-       prefix = node.primary_category.split('.')[0];
-    } else if (node.id && typeof node.id === 'string') {
+    // Логика определения префикса из ID или категории
+    if (node.primary_category) prefix = node.primary_category.split('.')[0];
+    else if (node.id && typeof node.id === 'string') {
        const parts = node.id.split('.');
        if (isNaN(Number(parts[0]))) prefix = parts[0];
     }
-
-    if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
+    
+    // Группировка всей физики, если нет конкретного цвета
+    if (prefix.includes('ph') && !CATEGORY_COLORS[prefix]) return CATEGORY_COLORS['physics'];
+    
     return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ГЕОМЕТРИЯ (УМЕНЬШЕННАЯ) ---
+  // --- 3D ОБЪЕКТЫ ---
   const nodeThreeObject = useCallback((node: any) => {
-    // РАДИКАЛЬНО УМЕНЬШАЕМ РАЗМЕРЫ
-    let size = 1; // Базовый размер для статей (был 3)
+    const group = new THREE.Group();
+    const color = getNodeColor(node);
+
+    // 1. Сфера
+    let size = 1.5; // Статьи маленькие
+    if (node.type === 'discipline' || node.type === 'adjacent_discipline') size = 6;
     
+    const geometry = new THREE.SphereGeometry(size, 16, 16);
+    const material = new THREE.MeshLambertMaterial({ 
+      color: color,
+      transparent: true,
+      opacity: node.type === 'article' ? 0.6 : 1.0 
+    });
+    group.add(new THREE.Mesh(geometry, material));
+
+    // 2. Текст (ТОЛЬКО для Дисциплин)
     if (node.type === 'discipline' || node.type === 'adjacent_discipline') {
-        size = 4; // Категории (было 12 — это очень много)
-    } else {
-        // Для статей: если у узла большой вес (val), чуть увеличиваем, но не сильно
-        size = Math.min((node.val || 1) * 0.5, 2); 
+      const sprite = new SpriteText(node.label);
+      sprite.color = color; // Цвет текста совпадает с узлом
+      sprite.textHeight = 8; // Размер шрифта
+      sprite.position.y = size + 4; // Сдвиг вверх
+      group.add(sprite);
     }
 
-    // Делаем статьи менее полигональными для скорости (8 сегментов), категории красивыми (32)
-    const resolution = (node.type === 'discipline') ? 32 : 8;
-    
-    const geometry = new THREE.SphereGeometry(size, resolution, resolution);
-    const material = new THREE.MeshLambertMaterial({ 
-      color: getNodeColor(node),
-      transparent: true,
-      opacity: node.type === 'article' ? 0.6 : 0.9 // Статьи полупрозрачные
-    });
-
-    return new THREE.Mesh(geometry, material);
+    return group;
   }, [getNodeColor]);
 
   return (
@@ -85,19 +86,22 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
       backgroundColor={GRAPH_CONFIG.backgroundColor}
       showNavInfo={false}
       
-      // Объекты
+      // Узлы
       nodeThreeObject={nodeThreeObject}
-      nodeLabel="label"
+      nodeLabel="label" // Тултип при наведении
       onNodeClick={onNodeClick}
 
-      // Связи
-      linkWidth={0.5} // Тонкие нити
-      linkOpacity={0.2}
-      linkColor={() => '#4A5568'} // Темно-серые связи, чтобы не рябило
+      // СВЯЗИ (ГЛАВНОЕ ИЗМЕНЕНИЕ)
+      // Толщина зависит от val (веса связи), который мы считали в BigQuery
+      linkWidth={(link: any) => Math.max(0.5, (link.val || 1) * 0.5)} 
       
-      // Параметры движка (Warmup ускоряет начальную стабилизацию)
-      warmupTicks={100} 
-      cooldownTicks={0}
+      // Прозрачность тоже можно привязать к весу (чем толще, тем заметнее)
+      linkOpacity={0.3}
+      
+      // Тултип на связи (показывает вес или тип)
+      linkLabel={(link: any) => `Connection Weight: ${link.val || 1}`}
+      
+      linkColor={() => '#555'} // Нейтральный серый цвет связей
     />
   );
 };
