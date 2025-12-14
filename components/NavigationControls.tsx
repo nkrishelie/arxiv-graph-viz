@@ -11,6 +11,8 @@ interface NavigationControlsProps {
     disciplines: number;
     articles: number;
   };
+  // НОВЫЙ ПРОП
+  onOpenHelp: () => void;
 }
 
 export const NavigationControls: React.FC<NavigationControlsProps> = ({ 
@@ -18,7 +20,8 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   onNodeSelect, 
   activeFilters, 
   toggleFilter,
-  counts 
+  counts,
+  onOpenHelp // Получаем функцию открытия
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
@@ -104,31 +107,31 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
         )}
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ: ФИЛЬТРЫ И СЧЕТЧИК */}
-      {/* Основной контейнер:
-         1. md:h-[calc(100vh-2rem)] - на десктопе занимает всю высоту (минус отступы)
-         2. md:pointer-events-none - пропускает клики сквозь пустое место!
-      */}
+      {/* ПРАВАЯ ПАНЕЛЬ */}
       <div className="absolute top-20 md:top-4 right-4 z-50 flex flex-col items-end gap-2 md:h-[calc(100vh-2rem)] md:pointer-events-none">
         
-        {/* Кнопка Тоггла (Мобильная) */}
-        <button 
-            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-            className="bg-gray-800/90 border border-gray-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden pointer-events-auto"
-        >
-            {isFiltersOpen ? 'Hide Filters' : 'Show Filters'}
-        </button>
+        {/* Кнопки управления (Тоггл + Help) */}
+        <div className="flex gap-2 pointer-events-auto">
+            {/* Кнопка HELP (Круглая) */}
+            <button 
+                onClick={onOpenHelp}
+                className="w-8 h-8 flex items-center justify-center bg-gray-800/90 border border-gray-600 text-yellow-500 rounded-full font-bold shadow-lg hover:bg-gray-700 hover:text-white transition-colors"
+                title="About / Help"
+            >
+                ?
+            </button>
+            
+            {/* Кнопка ТОГГЛ (Мобильная) */}
+            <button 
+                onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                className="bg-gray-800/90 border border-gray-600 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden"
+            >
+                {isFiltersOpen ? 'Hide' : 'Filters'}
+            </button>
+        </div>
 
-        {/* Контейнер содержимого:
-            1. md:h-full - растягивается на всю высоту родителя
-            2. md:justify-between - разносит фильтры (верх) и счетчик (низ)
-        */}
         <div className={`${isFiltersOpen ? 'flex' : 'hidden'} md:flex flex-col gap-4 w-64 transition-all md:h-full`}>
             
-            {/* БЛОК ФИЛЬТРОВ 
-               md:flex-1 - занимает всё свободное место, выталкивая счетчик вниз
-               pointer-events-auto - возвращаем кликабельность
-            */}
             <div className="bg-gray-900/80 backdrop-blur p-4 rounded-lg border border-gray-700 shadow-2xl overflow-hidden flex flex-col pointer-events-auto md:flex-1 max-h-[60vh] md:max-h-none">
                 <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-4 shrink-0">
                     <h4 className="text-yellow-500 text-xs font-bold uppercase tracking-widest">
@@ -137,7 +140,6 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
                     <button onClick={() => setIsFiltersOpen(false)} className="md:hidden text-gray-400 hover:text-white">✕</button>
                 </div>
                 
-                {/* Скроллируемая область списка внутри растянутого блока */}
                 <div className="overflow-y-auto custom-scrollbar flex-1 pr-1">
                     <label className="flex items-center gap-3 text-sm text-white mb-4 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors">
                     <input 
@@ -166,10 +168,6 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
                 </div>
             </div>
 
-            {/* БЛОК СТАТИСТИКИ 
-               Прижат к низу за счет flex-1 у блока фильтров выше
-               pointer-events-auto - возвращаем кликабельность
-            */}
             <div className="bg-gray-900/90 backdrop-blur p-3 rounded-lg border border-gray-700 shadow-xl text-center pointer-events-auto shrink-0">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Visible Nodes</div>
                 <div className="flex justify-around items-center text-sm">
