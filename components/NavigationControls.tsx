@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GraphNode } from '../types';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '../constants';
 
