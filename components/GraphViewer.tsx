@@ -36,7 +36,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     return CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ФИЗИКА ---
+  // --- ФИЗИКА И АВТО-ЗУМ ПРИ ЗАГРУЗКЕ ---
   useEffect(() => {
     if (fgRef.current) {
       const nodeCount = data.nodes.length;
@@ -70,12 +70,11 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
-  // --- УПРАВЛЕНИЕ КАМЕРОЙ (КНОПКИ) ---
+  // --- УПРАВЛЕНИЕ КАМЕРОЙ ---
   
   const handleZoom = (factor: number) => {
     if (!fgRef.current) return;
     const currentPos = fgRef.current.cameraPosition();
-    // Приближаем/отдаляем, умножая координаты на фактор
     fgRef.current.cameraPosition(
       { x: currentPos.x * factor, y: currentPos.y * factor, z: currentPos.z * factor },
       currentPos.lookAt, 
@@ -87,22 +86,29 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     if (!fgRef.current) return;
     const { x, y, z } = fgRef.current.cameraPosition();
     
-    // Вращение вокруг оси Y (Влево/Вправо)
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
     const x1 = x * cosY - z * sinY;
     const z1 = x * sinY + z * cosY;
-
-    // Вращение вокруг локальной оси X (Вверх/Вниз) - упрощенно через Y
-    // (Для полноценной орбиты нужен кватернион, но для кнопок сойдет и так)
-    const y1 = y + angleX * Math.sqrt(x*x + z*z); // Эвристика для наклона
+    const y1 = y + angleX * Math.sqrt(x*x + z*z);
 
     fgRef.current.cameraPosition({ x: x1, y: y1, z: z1 }, { x: 0, y: 0, z: 0 }, 500);
   };
 
+  // !!! ИСПРАВЛЕННЫЙ СБРОС !!!
   const handleReset = () => {
     if (!fgRef.current) return;
-    fgRef.current.cameraPosition({ x: 0, y: 0, z: 600 }, { x: 0, y: 0, z: 0 }, 1000);
+    
+    const nodeCount = data.nodes.length;
+    // Определяем дистанцию так же, как в useEffect
+    const isSkeletonMode = nodeCount < 500; 
+    const zPos = isSkeletonMode ? 900 : 600;
+
+    fgRef.current.cameraPosition(
+        { x: 0, y: 0, z: zPos }, // Далекая позиция
+        { x: 0, y: 0, z: 0 },    // Центр
+        1500
+    );
   };
 
   // --- RENDERING ---
@@ -159,17 +165,13 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
         cooldownTicks={0}
       />
 
-      {/* ПАНЕЛЬ УПРАВЛЕНИЯ КАМЕРОЙ */}
+      {/* Панель управления */}
       <div className="absolute bottom-6 left-6 flex flex-col gap-2 z-50">
-        
-        {/* Zoom & Reset */}
         <div className="flex gap-2 mb-2">
             <button onClick={() => handleZoom(0.7)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 transition-colors text-xl font-bold" title="Zoom In">+</button>
             <button onClick={() => handleZoom(1.4)} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full flex items-center justify-center border border-gray-600 transition-colors text-xl font-bold" title="Zoom Out">-</button>
             <button onClick={handleReset} className="w-10 h-10 bg-gray-800/80 hover:bg-gray-700 text-yellow-400 rounded-full flex items-center justify-center border border-gray-600 transition-colors text-lg font-bold" title="Reset Camera">⟳</button>
         </div>
-
-        {/* D-Pad (Стрелки) */}
         <div className="flex flex-col items-center gap-1 bg-gray-900/50 p-2 rounded-full border border-gray-700/50">
             <button onClick={() => handleRotate(0.2, 0)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">▲</button>
             <div className="flex gap-2">
@@ -178,7 +180,6 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
             </div>
             <button onClick={() => handleRotate(-0.2, 0)} className="w-10 h-8 bg-gray-800 hover:bg-gray-700 text-white rounded flex items-center justify-center transition-colors">▼</button>
         </div>
-
       </div>
     </div>
   );
