@@ -9,7 +9,7 @@ import { CATEGORY_COLORS } from './constants';
 const getDomain = (nodeId: string): string => {
   const parts = nodeId.split('.');
   const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other';
-  if (prefix.includes('ph') || prefix === 'gr' || prefix === 'astro' || prefix === 'cond' || prefix === 'quant') return 'physics';
+  if (prefix.includes('ph')) return 'physics';
   if (CATEGORY_COLORS[prefix]) return prefix;
   return 'other';
 };
@@ -19,9 +19,11 @@ const App: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
+  
+  // Максимальный вес связи (для нормализации яркости)
   const [maxLinkVal, setMaxLinkVal] = useState(1);
 
-  // Default: Math + Articles
+  // Default Filters
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['math', 'article']) 
   );
@@ -29,10 +31,14 @@ const App: React.FC = () => {
   useEffect(() => {
     getGraphData().then((data) => {
       setRawData(data);
-      // Считаем максимум для связей
+      
+      // Ищем самую "толстую" связь между дисциплинами
       let max = 0;
-      data.links.forEach(l => { if ((l.val || 0) > max) max = l.val || 0; });
+      data.links.forEach(l => { 
+          if (l.type === 'RELATED' && (l.val || 0) > max) max = l.val || 0; 
+      });
       setMaxLinkVal(max || 1);
+      
       setLoading(false);
     });
   }, []);
@@ -53,7 +59,6 @@ const App: React.FC = () => {
      return filters.has(domain);
   };
 
-  // 1. Фильтрация данных для графа
   const filteredData = useMemo(() => {
     if (!rawData) return { nodes: [], links: [] };
     
@@ -69,7 +74,7 @@ const App: React.FC = () => {
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
-  // 2. Динамический расчет соседей (Зависит от Фильтров!)
+  // Соседи (динамически от фильтров)
   const neighbors = useMemo(() => {
     if (!selectedNode || !rawData) return [];
 
@@ -82,10 +87,7 @@ const App: React.FC = () => {
     });
 
     const rawNeighbors = rawData.nodes.filter(n => relatedIds.has(n.id));
-    
-    // Фильтруем соседей теми же правилами, что и граф
     return rawNeighbors.filter(n => isNodeVisible(n, activeFilters));
-    
   }, [selectedNode, rawData, activeFilters]);
 
   const handleNodeSelect = (node: GraphNode) => {
@@ -93,7 +95,7 @@ const App: React.FC = () => {
     setFocusNode(node);
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading ArXiv Universe...</div>;
+  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading...</div>;
 
   return (
     <div className="relative w-full h-screen bg-[#000011] overflow-hidden">
