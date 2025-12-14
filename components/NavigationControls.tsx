@@ -18,21 +18,20 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
 
-  // Определяем цвет для шарика в поиске
   const getNodeColor = (node: GraphNode) => {
-    if (node.type === 'discipline' || node.type === 'adjacent_discipline') {
+    if (node.type !== 'article') {
         const prefix = node.id.split('.')[0];
         if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
         return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
     }
-    return '#A0AEC0'; // Серый для статей
+    return '#A0AEC0'; 
   };
 
   useEffect(() => {
     if (searchTerm.length < 2) { setSuggestions([]); return; }
     const lower = searchTerm.toLowerCase();
     
-    // 1. Поиск: Ищем в Label, ID, Authors и DESCRIPTION
+    // 1. Сначала находим ВСЕ совпадения
     const matches = nodes.filter(n => 
       n.label.toLowerCase().includes(lower) || 
       n.id.toLowerCase().includes(lower) ||
@@ -40,15 +39,37 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
       (n.description && n.description.toLowerCase().includes(lower))
     );
 
-    // 2. Сортировка: Дисциплины всегда выше статей
+    // 2. УМНАЯ СОРТИРОВКА (RANKING)
     matches.sort((a, b) => {
+        const aLabel = a.label.toLowerCase();
+        const bLabel = b.label.toLowerCase();
+        
+        // Приоритет 1: Дисциплины всегда выше статей
         const aIsDisc = a.type !== 'article';
         const bIsDisc = b.type !== 'article';
         if (aIsDisc && !bIsDisc) return -1;
         if (!aIsDisc && bIsDisc) return 1;
-        return 0;
+
+        // Приоритет 2: ТОЧНОЕ совпадение названия
+        if (aLabel === lower && bLabel !== lower) return -1;
+        if (bLabel === lower && aLabel !== lower) return 1;
+
+        // Приоритет 3: Название НАЧИНАЕТСЯ с запроса ("Logic" > "Biological")
+        const aStarts = aLabel.startsWith(lower);
+        const bStarts = bLabel.startsWith(lower);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        // Приоритет 4: Совпадение в названии важнее, чем в описании/авторах
+        const aInLabel = aLabel.includes(lower);
+        const bInLabel = bLabel.includes(lower);
+        if (aInLabel && !bInLabel) return -1;
+        if (!aInLabel && bInLabel) return 1;
+
+        return 0; // Иначе оставляем как есть
     });
 
+    // Отрезаем топ-10 уже ПОСЛЕ умной сортировки
     setSuggestions(matches.slice(0, 10));
   }, [searchTerm, nodes]);
 
@@ -61,7 +82,7 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search set theory, authors..."
+                placeholder="Search Logic, set theory..."
                 className="w-full bg-gray-900/90 border border-yellow-500/30 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-yellow-400 focus:bg-gray-900 transition-colors"
             />
             <span className="absolute right-3 top-3.5 text-gray-500">🔍</span>
@@ -75,7 +96,6 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
                 onClick={() => { onNodeSelect(node); setSearchTerm(''); setSuggestions([]); }}
                 className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 last:border-0 transition-colors flex items-center gap-3"
               >
-                {/* Цветной индикатор */}
                 <span 
                     className="w-3 h-3 rounded-full flex-shrink-0 shadow-[0_0_5px_currentColor]" 
                     style={{ backgroundColor: getNodeColor(node), color: getNodeColor(node) }}
@@ -85,7 +105,10 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
                     <div className="text-sm text-gray-200 font-medium truncate">{node.label}</div>
                     <div className="text-xs text-gray-500 flex justify-between mt-0.5">
                         <span className="truncate max-w-[70%]">
-                            {node.authors ? node.authors[0] + (node.authors.length > 1 ? ' et al.' : '') : node.id}
+                            {/* Если совпадение в авторах - показываем автора, иначе ID */}
+                            {node.authors && node.authors.some(a => a.toLowerCase().includes(searchTerm.toLowerCase())) 
+                                ? `Author: ${node.authors.find(a => a.toLowerCase().includes(searchTerm.toLowerCase()))}`
+                                : (node.type === 'article' ? node.id : 'Discipline')}
                         </span>
                         <span className="uppercase tracking-wider text-[10px] opacity-70 border border-gray-700 px-1 rounded">
                             {node.type !== 'article' ? 'Category' : 'Paper'}
