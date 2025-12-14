@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import SpriteText from 'three-spritetext';
@@ -9,19 +9,24 @@ interface GraphViewerProps {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
   focusNode?: GraphNode | null;
-  maxLinkVal: number; // Максимум для расчета цвета
+  maxLinkVal: number; // Максимальный вес связи в графе
 }
 
 export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode, maxLinkVal }) => {
   const fgRef = useRef<any>();
 
+  // Настройки физики (чтобы граф не взрывался)
   useEffect(() => {
     if (fgRef.current) {
-      fgRef.current.d3Force('charge').strength(-150);
-      fgRef.current.d3Force('link').distance(60);
+      fgRef.current.d3Force('charge').strength(-120);
+      fgRef.current.d3Force('link').distance((link: any) => {
+        // Дисциплины держим подальше друг от друга, статьи поближе
+        return link.type === 'RELATED' ? 100 : 30;
+      });
     }
   }, []);
 
+  // Камера летит к узлу
   useEffect(() => {
     if (focusNode && fgRef.current) {
       const distance = 80;
@@ -34,58 +39,82 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
+  // --- ЦВЕТА УЗЛОВ ---
   const getNodeColor = useCallback((node: any) => {
     let prefix = 'other';
-    if (node.primary_category) prefix = node.primary_category.split('.')[0];
-    else if (node.id && typeof node.id === 'string') {
-       const parts = node.id.split('.');
-       if (isNaN(Number(parts[0]))) prefix = parts[0];
+    // Пытаемся понять категорию по ID или primary_category
+    const rawId = node.primary_category || node.id;
+    
+    if (rawId) {
+        const parts = rawId.split('.');
+        if (isNaN(Number(parts[0]))) prefix = parts[0]; // math, cs, physics...
     }
+    
     if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
     return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
   }, []);
 
-  // --- ЛОГИКА ЦВЕТА СВЯЗЕЙ ---
-  const getLinkColor = useCallback((link: any) => {
-    const val = link.val || 1;
-    // Нормализуем значение от 0 до 1 относительно максимума в данных
-    // (используем Math.log для сглаживания, если разброс огромный, но пока линейно)
-    const intensity = Math.min(val / maxLinkVal, 1);
-    
-    // Чем сильнее связь, тем она белее и непрозрачнее.
-    // Слабая связь = 0.1 opacity, Сильная = 0.8 opacity
-    const opacity = 0.1 + (intensity * 0.7); 
-    
-    // Цвет: Слабая = серый (#555), Сильная = Белый (#FFF)
-    // Интерполяция RGB не обязательна, достаточно opacity, но для красоты:
-    const gray = Math.floor(80 + (175 * intensity)); // от 80 до 255
-    
-    return `rgba(${gray}, ${gray}, ${gray}, ${opacity})`;
-  }, [maxLinkVal]);
-
+  // --- ОБЪЕКТЫ (СФЕРЫ + ТЕКСТ) ---
   const nodeThreeObject = useCallback((node: any) => {
     const group = new THREE.Group();
     const color = getNodeColor(node);
-    let size = 1.5; 
-    if (node.type === 'discipline' || node.type === 'adjacent_discipline') size = 6;
     
+    // Размер: Дисциплины большие (10), Статьи маленькие (2)
+    const size = (node.type === 'discipline' || node.type === 'adjacent_discipline') ? 10 : 2;
+    
+    // Сфера
     const geometry = new THREE.SphereGeometry(size, 16, 16);
     const material = new THREE.MeshLambertMaterial({ 
       color: color,
       transparent: true,
-      opacity: node.type === 'article' ? 0.6 : 1.0 
+      opacity: node.type === 'article' ? 0.6 : 0.95 
     });
     group.add(new THREE.Mesh(geometry, material));
 
-    if (node.type === 'discipline' || node.type === 'adjacent_discipline') {
+    // Текст (ТОЛЬКО для Дисциплин)
+    if (node.type !== 'article') {
       const sprite = new SpriteText(node.label);
-      sprite.color = color; 
-      sprite.textHeight = 8; 
-      sprite.position.y = size + 4; 
+      sprite.color = color; // Цвет текста = цвет категории
+      sprite.textHeight = 12; 
+      sprite.position.y = size + 5; 
       group.add(sprite);
     }
+
     return group;
   }, [getNodeColor]);
+
+  // --- ВИЗУАЛИЗАЦИЯ СВЯЗЕЙ (САМОЕ ВАЖНОЕ) ---
+  
+  // 1. Цвет связи
+  const getLinkColor = useCallback((link: any) => {
+    // Если это связь Статья-Дисциплина -> очень тусклая серая
+    if (link.type === 'CONTAINS') return 'rgba(100, 100, 100, 0.1)';
+
+    // Если это связь Дисциплина-Дисциплина (RELATED)
+    const val = link.val || 0;
+    
+    // Считаем интенсивность относительно максимума (но не линейно, чтобы средние связи тоже было видно)
+    // Используем корень, чтобы сгладить разницу между 10 и 1000
+    const intensity = Math.min(Math.sqrt(val) / Math.sqrt(maxLinkVal || 1), 1);
+    
+    // Чем сильнее связь, тем она ЯРЧЕ (белее) и непрозрачнее
+    // Слабая (1 статья) = тусклая (0.15)
+    // Сильная = Яркая белая (0.8)
+    const opacity = 0.15 + (intensity * 0.65);
+    const brightness = Math.floor(100 + (155 * intensity)); // от 100 до 255
+    
+    return `rgba(${brightness}, ${brightness}, ${brightness}, ${opacity})`;
+  }, [maxLinkVal]);
+
+  // 2. Толщина связи
+  const getLinkWidth = useCallback((link: any) => {
+    if (link.type === 'CONTAINS') return 0.2; // Ниточка
+
+    // Для дисциплин: логарифмическая или корневая зависимость
+    // 1 статья -> 0.5
+    // 100 статей -> ~3
+    return Math.max(0.5, Math.sqrt(link.val || 1) * 0.3); 
+  }, []);
 
   return (
     <ForceGraph3D
@@ -93,14 +122,21 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
       graphData={data}
       backgroundColor={GRAPH_CONFIG.backgroundColor}
       showNavInfo={false}
+      
       nodeThreeObject={nodeThreeObject}
       nodeLabel="label"
       onNodeClick={onNodeClick}
 
       // СВЯЗИ
-      linkWidth={(link: any) => Math.max(0.5, (link.val || 1) * 0.5)} 
-      linkColor={getLinkColor} // Динамический цвет
-      linkLabel={(link: any) => `Papers together: ${Math.round(link.val || 1)}`} // Округляем до целого
+      linkColor={getLinkColor}
+      linkWidth={getLinkWidth}
+      linkLabel={(link: any) => {
+          if (link.type === 'RELATED') return `Shared Articles: ${link.val}`;
+          return '';
+      }}
+      
+      // Чтобы связи выглядели как лучи света
+      linkResolution={6} 
     />
   );
 };
