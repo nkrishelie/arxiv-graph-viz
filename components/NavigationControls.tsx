@@ -1,49 +1,111 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { GraphNode } from '../types';
 
 interface NavigationControlsProps {
-  searchTerm: string;
-  onSearchChange: (val: string) => void;
-  nodeCount: number;
+  nodes: GraphNode[];
+  onNodeSelect: (node: GraphNode) => void;
+  // Фильтры
+  visibleTypes: Set<string>;
+  toggleType: (type: string) => void;
 }
 
 export const NavigationControls: React.FC<NavigationControlsProps> = ({ 
-  searchTerm, 
-  onSearchChange,
-  nodeCount
+  nodes, 
+  onNodeSelect,
+  visibleTypes,
+  toggleType
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Ref для клика вне компонента
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Логика поиска (Dropdown)
+  useEffect(() => {
+    if (searchTerm.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const lower = searchTerm.toLowerCase();
+    
+    // Ищем совпадения (максимум 10 штук для скорости)
+    const matches = nodes
+      .filter(n => 
+        n.label.toLowerCase().includes(lower) || 
+        (n.authors && n.authors.some(a => a.toLowerCase().includes(lower)))
+      )
+      .slice(0, 10);
+      
+    setSuggestions(matches);
+    setShowSuggestions(true);
+  }, [searchTerm, nodes]);
+
+  // Выбор из списка
+  const handleSelect = (node: GraphNode) => {
+    onNodeSelect(node);
+    setSearchTerm(''); // Очистить или оставить node.label - на выбор
+    setShowSuggestions(false);
+  };
+
   return (
-    <div className="absolute top-4 left-4 z-50 flex flex-col gap-4 w-80">
-      {/* Панель поиска */}
-      <div className="bg-gray-900/90 p-4 rounded-lg border border-blue-500/30 backdrop-blur shadow-xl">
-        <h3 className="text-blue-400 text-sm font-bold uppercase mb-2 flex justify-between">
-          <span>ArXiv Explorer</span>
-          <span className="text-gray-500">{nodeCount} nodes</span>
-        </h3>
-        
+    <div className="absolute top-4 left-4 z-50 w-80 flex flex-col gap-4" ref={wrapperRef}>
+      
+      {/* 1. ПОИСК */}
+      <div className="relative">
         <input
           type="text"
           value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search articles, authors..."
-          className="w-full bg-black/50 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search ArXiv (papers, categories)..."
+          className="w-full bg-gray-900/90 border border-blue-500/50 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-blue-400"
+          onFocus={() => searchTerm.length >= 2 && setShowSuggestions(true)}
         />
         
-        <div className="mt-2 text-xs text-gray-500">
-          Try: "Neural Networks", "Topology", "Black Hole"
-        </div>
+        {/* Выпадающий список */}
+        {showSuggestions && suggestions.length > 0 && (
+          <ul className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded shadow-2xl max-h-80 overflow-y-auto">
+            {suggestions.map(node => (
+              <li 
+                key={node.id}
+                onClick={() => handleSelect(node)}
+                className="px-4 py-3 hover:bg-blue-900/50 cursor-pointer border-b border-gray-800 last:border-0"
+              >
+                <div className="text-sm text-gray-200 font-medium">{node.label}</div>
+                <div className="text-xs text-gray-500 mt-1 flex justify-between">
+                  <span>[{node.type}]</span>
+                  <span className="opacity-50">{node.id}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Легенда (Подсказка цветов) */}
-      <div className="bg-gray-900/80 p-3 rounded-lg border border-gray-800 text-xs text-gray-300">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-3 h-3 rounded-full bg-purple-500"></span> Adjacent Fields
-        </div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-3 h-3 rounded-full bg-blue-500"></span> Math Categories
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-gray-500"></span> Articles
-        </div>
+      {/* 2. ФИЛЬТРЫ (Чекбоксы) */}
+      <div className="bg-gray-900/80 backdrop-blur p-4 rounded border border-gray-800">
+        <h4 className="text-gray-400 text-xs font-bold uppercase mb-3">Visible Layers</h4>
+        
+        <label className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white">
+          <input 
+            type="checkbox" 
+            checked={visibleTypes.has('discipline')}
+            onChange={() => toggleType('discipline')}
+            className="w-4 h-4 rounded bg-gray-700 border-gray-500 checked:bg-blue-500"
+          />
+          Categories (Math, CS...)
+        </label>
+
+        <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer hover:text-white">
+          <input 
+            type="checkbox" 
+            checked={visibleTypes.has('article')}
+            onChange={() => toggleType('article')}
+            className="w-4 h-4 rounded bg-gray-700 border-gray-500 checked:bg-blue-500"
+          />
+          Articles
+        </label>
       </div>
     </div>
   );
