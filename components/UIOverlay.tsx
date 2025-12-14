@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Latex from 'react-latex-next';
 import { GraphNode } from '../types';
 import { CATEGORY_COLORS } from '../constants';
