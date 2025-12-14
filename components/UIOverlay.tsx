@@ -4,76 +4,69 @@ import { GraphNode } from '../types';
 
 interface UIOverlayProps {
   selectedNode: GraphNode | null;
+  neighbors: GraphNode[]; // Новый проп
   onClose: () => void;
 }
 
-export const UIOverlay: React.FC<UIOverlayProps> = ({ selectedNode, onClose }) => {
+export const UIOverlay: React.FC<UIOverlayProps> = ({ selectedNode, neighbors, onClose }) => {
   if (!selectedNode) return null;
 
-  // Определяем, что это за узел
-  const isArticle = selectedNode.type === 'article';
-  const categoryLabel = selectedNode.primary_category || selectedNode.id;
-
   return (
-    <div className="absolute top-4 right-4 w-96 max-h-[90vh] overflow-y-auto bg-gray-900/95 text-white p-6 rounded-lg shadow-2xl border border-blue-500/30 backdrop-blur-md transition-all z-50">
+    // Окно смещено влево от правого края, чтобы не перекрывать фильтры
+    <div className="absolute top-4 right-72 w-96 max-h-[90vh] overflow-y-auto bg-gray-900/95 text-white p-6 rounded-lg shadow-2xl border border-gray-700 backdrop-blur-md z-40">
       
-      {/* Кнопка закрытия */}
-      <button 
-        onClick={onClose}
-        className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-      >
-        ✕
-      </button>
+      <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white">✕</button>
 
-      {/* Заголовок (Название статьи или Дисциплины) */}
-      <h2 className="text-xl font-bold mb-2 leading-tight text-blue-100">
+      {/* Заголовок */}
+      <h2 className="text-xl font-bold mb-2 leading-tight text-yellow-400">
         <Latex>{selectedNode.label}</Latex>
       </h2>
+      <div className="text-xs text-gray-400 mb-4 font-mono">{selectedNode.id}</div>
 
-      {/* Подзаголовок (Категория) */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-blue-600/20 text-blue-300 border border-blue-500/30">
-          {categoryLabel}
-        </span>
-        {selectedNode.group && (
-          <span className="text-xs text-gray-400 uppercase tracking-wider">
-            {selectedNode.group}
-          </span>
-        )}
-      </div>
-
-      {/* Авторы (только для статей) */}
-      {isArticle && selectedNode.authors && (
-        <div className="mb-4 text-sm text-gray-300">
-          <span className="font-semibold text-gray-400 block mb-1">Authors:</span>
-          {selectedNode.authors.join(', ')}
-        </div>
-      )}
-
-      {/* Описание / Абстракт */}
+      {/* Инфо */}
       {selectedNode.description && (
-        <div className="text-sm text-gray-300 leading-relaxed mb-4 p-3 bg-black/20 rounded border border-white/5">
+        <div className="text-sm text-gray-300 mb-4 p-3 bg-black/30 rounded border border-white/5">
            <Latex>{selectedNode.description}</Latex>
         </div>
       )}
+      
+      {/* Авторы */}
+      {selectedNode.authors && (
+        <div className="mb-4 text-sm">
+          <span className="text-gray-500 font-bold block">Authors:</span>
+          <span className="text-gray-300">{selectedNode.authors.join(', ')}</span>
+        </div>
+      )}
 
-      {/* Ссылка на ArXiv (только для статей) */}
-      {selectedNode.url && (
-        <a 
-          href={selectedNode.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded transition-colors"
-        >
-          View on ArXiv
-        </a>
+      {/* СМЕЖНЫЕ УЗЛЫ (Connections) */}
+      {neighbors.length > 0 && (
+        <div className="mt-6 border-t border-gray-800 pt-4">
+          <h3 className="text-sm font-bold text-gray-400 uppercase mb-3">
+            Connected Nodes ({neighbors.length})
+          </h3>
+          <ul className="space-y-2">
+            {neighbors.slice(0, 10).map(n => (
+              <li key={n.id} className="text-sm bg-gray-800/50 p-2 rounded flex items-center gap-2">
+                <span 
+                  className={`w-2 h-2 rounded-full ${n.type === 'article' ? 'bg-gray-500' : 'bg-yellow-500'}`}
+                ></span>
+                <span className="truncate flex-1"><Latex>{n.label}</Latex></span>
+              </li>
+            ))}
+            {neighbors.length > 10 && (
+              <li className="text-xs text-gray-500 italic text-center pt-1">
+                ...and {neighbors.length - 10} more
+              </li>
+            )}
+          </ul>
+        </div>
       )}
       
-      {/* Инфо для категорий */}
-      {!isArticle && (
-        <div className="text-xs text-gray-500 mt-4 italic">
-          Click on surrounding nodes to explore articles in this category.
-        </div>
+      {/* Кнопка ссылки */}
+      {selectedNode.url && (
+        <a href={selectedNode.url} target="_blank" rel="noopener noreferrer" className="block mt-6 text-center bg-blue-700 hover:bg-blue-600 text-white py-2 rounded">
+          Open on ArXiv
+        </a>
       )}
     </div>
   );
