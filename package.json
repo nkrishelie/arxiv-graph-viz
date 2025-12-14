@@ -1,34 +1,31 @@
 {
-  "name": "mathlogic-nexus-3d",
+  "name": "arxiv-graph-viz",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "d3": "^7.9.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-force-graph-3d": "^1.24.2",
-    "three": "^0.160.0",
-    "three-spritetext": "^1.8.2",
-    "katex": "^0.16.9",           
-    "react-latex-next": "^3.0.0"
+    "three": "^0.160.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
     "@types/three": "^0.160.0",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
     "typescript": "^5.2.2",
-    "vite": "^5.0.8"
-  },
-  "overrides": {
-    "three": "$three"
+    "vite": "^5.0.0"
   }
 }
