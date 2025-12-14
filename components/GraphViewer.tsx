@@ -9,14 +9,14 @@ interface GraphViewerProps {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
   focusNode?: GraphNode | null;
+  maxLinkVal: number; // Максимум для расчета цвета
 }
 
-export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode }) => {
+export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, focusNode, maxLinkVal }) => {
   const fgRef = useRef<any>();
 
   useEffect(() => {
     if (fgRef.current) {
-      // Физика: сильное отталкивание, чтобы текст не слипался
       fgRef.current.d3Force('charge').strength(-150);
       fgRef.current.d3Force('link').distance(60);
     }
@@ -34,29 +34,39 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     }
   }, [focusNode]);
 
-  // --- ПОЛУЧЕНИЕ ЦВЕТА ---
   const getNodeColor = useCallback((node: any) => {
     let prefix = 'other';
-    // Логика определения префикса из ID или категории
     if (node.primary_category) prefix = node.primary_category.split('.')[0];
     else if (node.id && typeof node.id === 'string') {
        const parts = node.id.split('.');
        if (isNaN(Number(parts[0]))) prefix = parts[0];
     }
-    
-    // Группировка всей физики, если нет конкретного цвета
-    if (prefix.includes('ph') && !CATEGORY_COLORS[prefix]) return CATEGORY_COLORS['physics'];
-    
+    if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
     return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
   }, []);
 
-  // --- 3D ОБЪЕКТЫ ---
+  // --- ЛОГИКА ЦВЕТА СВЯЗЕЙ ---
+  const getLinkColor = useCallback((link: any) => {
+    const val = link.val || 1;
+    // Нормализуем значение от 0 до 1 относительно максимума в данных
+    // (используем Math.log для сглаживания, если разброс огромный, но пока линейно)
+    const intensity = Math.min(val / maxLinkVal, 1);
+    
+    // Чем сильнее связь, тем она белее и непрозрачнее.
+    // Слабая связь = 0.1 opacity, Сильная = 0.8 opacity
+    const opacity = 0.1 + (intensity * 0.7); 
+    
+    // Цвет: Слабая = серый (#555), Сильная = Белый (#FFF)
+    // Интерполяция RGB не обязательна, достаточно opacity, но для красоты:
+    const gray = Math.floor(80 + (175 * intensity)); // от 80 до 255
+    
+    return `rgba(${gray}, ${gray}, ${gray}, ${opacity})`;
+  }, [maxLinkVal]);
+
   const nodeThreeObject = useCallback((node: any) => {
     const group = new THREE.Group();
     const color = getNodeColor(node);
-
-    // 1. Сфера
-    let size = 1.5; // Статьи маленькие
+    let size = 1.5; 
     if (node.type === 'discipline' || node.type === 'adjacent_discipline') size = 6;
     
     const geometry = new THREE.SphereGeometry(size, 16, 16);
@@ -67,15 +77,13 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
     });
     group.add(new THREE.Mesh(geometry, material));
 
-    // 2. Текст (ТОЛЬКО для Дисциплин)
     if (node.type === 'discipline' || node.type === 'adjacent_discipline') {
       const sprite = new SpriteText(node.label);
-      sprite.color = color; // Цвет текста совпадает с узлом
-      sprite.textHeight = 8; // Размер шрифта
-      sprite.position.y = size + 4; // Сдвиг вверх
+      sprite.color = color; 
+      sprite.textHeight = 8; 
+      sprite.position.y = size + 4; 
       group.add(sprite);
     }
-
     return group;
   }, [getNodeColor]);
 
@@ -85,23 +93,14 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ data, onNodeClick, foc
       graphData={data}
       backgroundColor={GRAPH_CONFIG.backgroundColor}
       showNavInfo={false}
-      
-      // Узлы
       nodeThreeObject={nodeThreeObject}
-      nodeLabel="label" // Тултип при наведении
+      nodeLabel="label"
       onNodeClick={onNodeClick}
 
-      // СВЯЗИ (ГЛАВНОЕ ИЗМЕНЕНИЕ)
-      // Толщина зависит от val (веса связи), который мы считали в BigQuery
+      // СВЯЗИ
       linkWidth={(link: any) => Math.max(0.5, (link.val || 1) * 0.5)} 
-      
-      // Прозрачность тоже можно привязать к весу (чем толще, тем заметнее)
-      linkOpacity={0.3}
-      
-      // Тултип на связи (показывает вес или тип)
-      linkLabel={(link: any) => `Connection Weight: ${link.val || 1}`}
-      
-      linkColor={() => '#555'} // Нейтральный серый цвет связей
+      linkColor={getLinkColor} // Динамический цвет
+      linkLabel={(link: any) => `Papers together: ${Math.round(link.val || 1)}`} // Округляем до целого
     />
   );
 };
