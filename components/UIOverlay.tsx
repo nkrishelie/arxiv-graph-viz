@@ -1,7 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import Latex from 'react-latex-next';
+import React from 'react';
 import { GraphNode } from '../types';
-import { CATEGORY_COLORS } from '../constants';
 
 interface UIOverlayProps {
   selectedNode: GraphNode | null;
@@ -13,150 +11,106 @@ interface UIOverlayProps {
 export const UIOverlay: React.FC<UIOverlayProps> = ({ 
   selectedNode, 
   neighbors, 
-  onClose,
-  onNodeClick
+  onClose, 
+  onNodeClick 
 }) => {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-
-  const getNodeColor = useCallback((node: GraphNode) => {
-    let prefix = 'other';
-    const rawId = node.primary_category || node.id;
-    if (rawId) {
-       const parts = rawId.split('.');
-       if (isNaN(Number(parts[0]))) prefix = parts[0];
-    }
-
-    const lowerId = rawId.toLowerCase();
-    if (lowerId.includes('quant-ph')) return CATEGORY_COLORS['quant-ph'];
-    if (lowerId.includes('astro-ph')) return CATEGORY_COLORS['astro-ph'];
-    if (lowerId.includes('gr-qc')) return CATEGORY_COLORS['gr-qc'];
-    if (lowerId.includes('cond-mat')) return CATEGORY_COLORS['cond-mat'];
-    if (lowerId.includes('hep')) return CATEGORY_COLORS['hep-th'];
-
-    if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
-    return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // На мобильных отключаем перетаскивание, чтобы не мешать скроллу
-    if (window.innerWidth < 768) return;
-    
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
-    };
-    const handleMouseUp = () => setIsDragging(false);
-    
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
-
-  // Сбрасываем позицию при закрытии/открытии
-  useEffect(() => {
-    setPosition({ x: 0, y: 0 });
-  }, [selectedNode]);
-
   if (!selectedNode) return null;
 
-  const headerColor = getNodeColor(selectedNode);
-  
-  const relatedDisciplines = neighbors.filter(
-    n => n.type !== 'article'
-  );
+  const isArticle = selectedNode.type === 'article';
 
   return (
-    <div 
-      className={`
-        absolute z-40 flex flex-col bg-gray-900/95 text-white rounded-lg shadow-2xl border border-gray-700 backdrop-blur-md
-        
-        /* МОБИЛЬНАЯ ВЕРСИЯ: */
-        top-24 left-4 right-4 w-auto max-h-[60vh]
-        
-        /* ДЕСКТОП ВЕРСИЯ (md:): */
-        md:top-5 md:left-auto md:right-80 md:w-96 md:max-h-[85vh]
-      `}
-      style={{ 
-        // Применяем transform только для перетаскивания (оно работает поверх CSS позиционирования)
-        transform: `translate(${position.x}px, ${position.y}px)`,
-        boxShadow: `0 0 20px ${headerColor}20`
-      }}
-    >
-      {/* HEADER */}
-      <div 
-        onMouseDown={handleMouseDown}
-        className="p-4 border-b border-gray-700 cursor-move bg-gray-800/50 rounded-t-lg flex justify-between items-start select-none touch-none"
-      >
+    <div className="fixed top-0 right-0 w-full md:w-[480px] h-full bg-gray-900/95 backdrop-blur-md border-l border-gray-700 shadow-2xl z-[100] transform transition-transform duration-300 overflow-y-auto custom-scrollbar">
+      
+      {/* 1. ХЕДЕР (Липкий, чтобы крестик всегда был под рукой) */}
+      <div className="sticky top-0 bg-gray-900/95 backdrop-blur z-10 px-6 py-5 border-b border-gray-700/50 flex justify-between items-start gap-4">
         <div>
-            <h2 
-              className="text-lg font-bold leading-tight pointer-events-none"
-              style={{ color: headerColor }}
-            >
-                <Latex>{selectedNode.label}</Latex>
-            </h2>
-            <div className="text-xs text-gray-500 font-mono mt-1 pointer-events-none">{selectedNode.id}</div>
+           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">
+             {selectedNode.type === 'article' ? 'Research Paper' : 'Scientific Discipline'}
+           </div>
+           <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
+             {selectedNode.label}
+           </h2>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-white ml-4 p-1 text-xl leading-none">✕</button>
+        <button 
+          onClick={onClose}
+          className="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-2 py-1 hover:bg-white/10 rounded"
+        >
+          &times;
+        </button>
       </div>
 
-      <div className="p-6 overflow-y-auto custom-scrollbar">
-        {selectedNode.description && (
-            <div className="text-sm text-gray-300 mb-5 leading-relaxed p-3 bg-black/20 rounded border border-white/5 max-h-40 overflow-y-auto">
-            <Latex>{selectedNode.description}</Latex>
-            </div>
-        )}
+      <div className="p-6 space-y-6">
         
-        {selectedNode.authors && (
-            <div className="mb-5 text-sm">
-            <span className="text-gray-500 font-bold block mb-1 uppercase text-xs">Authors</span>
-            <span className="text-gray-200">{selectedNode.authors.join(', ')}</span>
+        {/* МЕТАДАННЫЕ (Авторы, Категория, Ссылка) */}
+        <div className="flex flex-wrap gap-2 text-sm">
+            <span className="bg-gray-800 text-yellow-500 px-2 py-1 rounded border border-gray-700 font-mono text-xs">
+                {selectedNode.id}
+            </span>
+            {selectedNode.primary_category && (
+                <span className="bg-gray-800 text-blue-400 px-2 py-1 rounded border border-gray-700 font-mono text-xs">
+                    {selectedNode.primary_category}
+                </span>
+            )}
+            {isArticle && selectedNode.url && (
+                <a 
+                    href={selectedNode.url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 px-3 py-1 rounded border border-blue-500/30 text-xs transition-colors flex items-center gap-1"
+                >
+                    View on arXiv ↗
+                </a>
+            )}
+        </div>
+
+        {isArticle && selectedNode.authors && (
+            <div className="text-sm text-gray-400">
+                <strong className="text-gray-500 uppercase text-xs tracking-wide mr-2">Authors:</strong>
+                {selectedNode.authors.join(', ')}
             </div>
         )}
 
-        {relatedDisciplines.length > 0 && (
-            <div className="mt-4 border-t border-gray-800 pt-4">
-            <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
-                Related Topics ({relatedDisciplines.length})
+        {/* 2. ОПИСАНИЕ (АБСТРАКТ) 
+            Убрали max-h и overflow. Теперь текст течет свободно. 
+            Скроллится только вся панель целиком.
+        */}
+        {selectedNode.description && (
+          <div className="bg-black/20 p-4 rounded-lg border border-gray-800">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Abstract</h3>
+            <p className="text-gray-300 text-sm leading-relaxed text-justify">
+              {selectedNode.description}
+            </p>
+          </div>
+        )}
+
+        {/* СПИСОК СВЯЗЕЙ (Соседи) */}
+        {neighbors.length > 0 && (
+          <div>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 sticky top-[85px] bg-gray-900/95 py-2 z-0">
+                Related Connections ({neighbors.length})
             </h3>
-            <ul className="space-y-2">
-                {relatedDisciplines.map(n => {
-                  const nodeColor = getNodeColor(n);
-                  return (
-                    <li 
-                        key={n.id} 
-                        onClick={() => onNodeClick(n)}
-                        className="text-sm bg-gray-800/40 hover:bg-white/5 border border-transparent p-2 rounded flex items-center gap-3 cursor-pointer transition-all group"
-                    >
-                        <span 
-                          className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] flex-shrink-0"
-                          style={{ backgroundColor: nodeColor, color: nodeColor }}
-                        ></span>
-                        <span className="truncate font-medium text-gray-300 group-hover:text-white transition-colors">
-                          <Latex>{n.label}</Latex>
-                        </span>
-                    </li>
-                  );
-                })}
-            </ul>
+            <div className="grid grid-cols-1 gap-2">
+              {neighbors.map(node => (
+                <div 
+                  key={node.id}
+                  onClick={() => onNodeClick(node)}
+                  className="group flex items-center gap-3 p-3 rounded-lg bg-gray-800/40 hover:bg-gray-700 cursor-pointer border border-transparent hover:border-gray-600 transition-all"
+                >
+                  <div 
+                    className={`w-2 h-2 rounded-full shrink-0 ${node.type === 'article' ? 'bg-gray-400' : 'bg-yellow-500 shadow-[0_0_5px_orange]'}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-200 group-hover:text-white truncate">
+                        {node.label}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">
+                        {node.type === 'article' ? node.authors?.slice(0, 2).join(', ') + '...' : 'Discipline'}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-        )}
-
-        {selectedNode.url && (
-            <a href={selectedNode.url} target="_blank" rel="noopener noreferrer" className="block mt-6 text-center bg-blue-700 hover:bg-blue-600 text-white font-medium py-2 rounded shadow-lg">
-            Open on ArXiv
-            </a>
+          </div>
         )}
       </div>
     </div>
