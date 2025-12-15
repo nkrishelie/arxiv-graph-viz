@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Latex from 'react-latex-next';
 import { GraphNode } from '../types';
+import { CATEGORY_COLORS } from '../constants';
 
 interface UIOverlayProps {
   selectedNode: GraphNode | null;
@@ -11,165 +13,152 @@ interface UIOverlayProps {
 export const UIOverlay: React.FC<UIOverlayProps> = ({ 
   selectedNode, 
   neighbors, 
-  onClose, 
-  onNodeClick 
+  onClose,
+  onNodeClick
 }) => {
-  // Координаты окна
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-  const cardRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef({ x: 0, y: 0 });
 
-  // При открытии нового узла ставим окно справа, но не вплотную
-  useEffect(() => {
-    if (selectedNode) {
-      // Вычисляем позицию: справа с отступом, чтобы не закрывать фильтры сразу
-      const initialX = window.innerWidth > 768 ? window.innerWidth - 500 : 20;
-      const initialY = 80; // Чуть ниже поиска
-      setPosition({ x: initialX, y: initialY });
+  const getNodeColor = useCallback((node: GraphNode) => {
+    let prefix = 'other';
+    const rawId = node.primary_category || node.id;
+    if (rawId) {
+       const parts = rawId.split('.');
+       if (isNaN(Number(parts[0]))) prefix = parts[0];
     }
-  }, [selectedNode]);
 
-  // Логика перетаскивания
+    const lowerId = rawId.toLowerCase();
+    if (lowerId.includes('quant-ph')) return CATEGORY_COLORS['quant-ph'];
+    if (lowerId.includes('astro-ph')) return CATEGORY_COLORS['astro-ph'];
+    if (lowerId.includes('gr-qc')) return CATEGORY_COLORS['gr-qc'];
+    if (lowerId.includes('cond-mat')) return CATEGORY_COLORS['cond-mat'];
+    if (lowerId.includes('hep')) return CATEGORY_COLORS['hep-th'];
+
+    if (prefix.includes('ph')) return CATEGORY_COLORS['physics'];
+    return CATEGORY_COLORS[prefix] || CATEGORY_COLORS['other'];
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // На мобильных отключаем перетаскивание, чтобы не мешать скроллу
+    if (window.innerWidth < 768) return;
+    
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
-      
-      const newX = e.clientX - dragStartPos.current.x;
-      const newY = e.clientY - dragStartPos.current.y;
-
-      setPosition({ x: newX, y: newY });
+      setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
     };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
+    const handleMouseUp = () => setIsDragging(false);
+    
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // Начинаем тащить только если кликнули по шапке
-    setIsDragging(true);
-    // Вычисляем смещение курсора относительно угла окна
-    dragStartPos.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    };
-  };
+  // Сбрасываем позицию при закрытии/открытии
+  useEffect(() => {
+    setPosition({ x: 0, y: 0 });
+  }, [selectedNode]);
 
   if (!selectedNode) return null;
 
-  const isArticle = selectedNode.type === 'article';
+  const headerColor = getNodeColor(selectedNode);
+  
+  const relatedDisciplines = neighbors.filter(
+    n => n.type !== 'article'
+  );
 
   return (
     <div 
-      ref={cardRef}
+      className={`
+        absolute z-40 flex flex-col bg-gray-900/95 text-white rounded-lg shadow-2xl border border-gray-700 backdrop-blur-md
+        
+        /* МОБИЛЬНАЯ ВЕРСИЯ: */
+        top-24 left-4 right-4 w-auto max-h-[60vh]
+        
+        /* ДЕСКТОП ВЕРСИЯ (md:): */
+        md:top-5 md:left-auto md:right-80 md:w-96 md:max-h-[85vh]
+      `}
       style={{ 
-        left: position.x, 
-        top: position.y,
-        // На мобилках фиксируем жестко, на десктопе - абсолютное позиционирование
-        position: 'fixed' 
+        // Применяем transform только для перетаскивания (оно работает поверх CSS позиционирования)
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        boxShadow: `0 0 20px ${headerColor}20`
       }}
-      className="z-[60] w-[90vw] md:w-[450px] flex flex-col max-h-[80vh] shadow-2xl rounded-xl overflow-hidden border border-gray-700 bg-gray-900/95 backdrop-blur-md transition-shadow duration-200"
     >
-        
-        {/* 1. ШАПКА (HANDLE) - За неё таскаем */}
-        <div 
-          onMouseDown={handleMouseDown}
-          className="shrink-0 px-5 py-3 border-b border-gray-700 flex justify-between items-start bg-gray-800/50 cursor-move select-none"
-        >
-          <div className="pointer-events-none"> {/* Чтобы текст не выделялся при перетаскивании */}
-             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">
-               {selectedNode.type === 'article' ? 'Research Paper' : 'Scientific Discipline'}
-             </div>
-             <h2 className="text-lg font-bold text-white leading-tight line-clamp-1 mr-4">
-               {selectedNode.label}
-             </h2>
-          </div>
-          <button 
-            onClick={onClose}
-            onMouseDown={(e) => e.stopPropagation()} // Чтобы клик по крестику не начинал драг
-            className="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-2 hover:bg-white/10 rounded cursor-pointer"
-          >
-            &times;
-          </button>
+      {/* HEADER */}
+      <div 
+        onMouseDown={handleMouseDown}
+        className="p-4 border-b border-gray-700 cursor-move bg-gray-800/50 rounded-t-lg flex justify-between items-start select-none touch-none"
+      >
+        <div>
+            <h2 
+              className="text-lg font-bold leading-tight pointer-events-none"
+              style={{ color: headerColor }}
+            >
+                <Latex>{selectedNode.label}</Latex>
+            </h2>
+            <div className="text-xs text-gray-500 font-mono mt-1 pointer-events-none">{selectedNode.id}</div>
         </div>
+        <button onClick={onClose} className="text-gray-500 hover:text-white ml-4 p-1 text-xl leading-none">✕</button>
+      </div>
 
-        {/* 2. ТЕЛО (СКРОЛЛИТСЯ) */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5 cursor-default">
-          
-          {/* Метаданные */}
-          <div className="flex flex-wrap gap-2 text-sm">
-              <span className="bg-gray-800 text-yellow-500 px-2 py-0.5 rounded border border-gray-700 font-mono text-[10px]">
-                  {selectedNode.id}
-              </span>
-              {selectedNode.primary_category && (
-                  <span className="bg-gray-800 text-blue-400 px-2 py-0.5 rounded border border-gray-700 font-mono text-[10px]">
-                      {selectedNode.primary_category}
-                  </span>
-              )}
-              {isArticle && selectedNode.url && (
-                  <a 
-                      href={selectedNode.url} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 text-[10px] transition-colors flex items-center gap-1"
-                  >
-                      arXiv ↗
-                  </a>
-              )}
-          </div>
-
-          {isArticle && selectedNode.authors && (
-              <div className="text-sm text-gray-400 border-b border-gray-800 pb-3">
-                  <strong className="text-gray-500 uppercase text-[10px] tracking-wide mr-2 block mb-1">Authors</strong>
-                  {selectedNode.authors.join(', ')}
-              </div>
-          )}
-
-          {/* Абстракт */}
-          {selectedNode.description && (
-            <div className="bg-white/5 p-3 rounded border border-white/10">
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Abstract</h3>
-              <p className="text-gray-300 text-sm leading-relaxed text-justify">
-                {selectedNode.description}
-              </p>
+      <div className="p-6 overflow-y-auto custom-scrollbar">
+        {selectedNode.description && (
+            <div className="text-sm text-gray-300 mb-5 leading-relaxed p-3 bg-black/20 rounded border border-white/5 max-h-40 overflow-y-auto">
+            <Latex>{selectedNode.description}</Latex>
             </div>
-          )}
-
-          {/* Соседи */}
-          {neighbors.length > 0 && (
-            <div>
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                  Connections ({neighbors.length})
-              </h3>
-              <div className="grid grid-cols-1 gap-1.5">
-                {neighbors.map(node => (
-                  <div 
-                    key={node.id}
-                    onClick={() => onNodeClick(node)}
-                    className="flex items-center gap-3 p-2 rounded hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-gray-600/50"
-                  >
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${node.type === 'article' ? 'bg-gray-500' : 'bg-yellow-500'}`} />
-                    <div className="truncate text-xs text-gray-300 font-medium">
-                        {node.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        )}
         
+        {selectedNode.authors && (
+            <div className="mb-5 text-sm">
+            <span className="text-gray-500 font-bold block mb-1 uppercase text-xs">Authors</span>
+            <span className="text-gray-200">{selectedNode.authors.join(', ')}</span>
+            </div>
+        )}
+
+        {relatedDisciplines.length > 0 && (
+            <div className="mt-4 border-t border-gray-800 pt-4">
+            <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
+                Related Topics ({relatedDisciplines.length})
+            </h3>
+            <ul className="space-y-2">
+                {relatedDisciplines.map(n => {
+                  const nodeColor = getNodeColor(n);
+                  return (
+                    <li 
+                        key={n.id} 
+                        onClick={() => onNodeClick(n)}
+                        className="text-sm bg-gray-800/40 hover:bg-white/5 border border-transparent p-2 rounded flex items-center gap-3 cursor-pointer transition-all group"
+                    >
+                        <span 
+                          className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] flex-shrink-0"
+                          style={{ backgroundColor: nodeColor, color: nodeColor }}
+                        ></span>
+                        <span className="truncate font-medium text-gray-300 group-hover:text-white transition-colors">
+                          <Latex>{n.label}</Latex>
+                        </span>
+                    </li>
+                  );
+                })}
+            </ul>
+            </div>
+        )}
+
+        {selectedNode.url && (
+            <a href={selectedNode.url} target="_blank" rel="noopener noreferrer" className="block mt-6 text-center bg-blue-700 hover:bg-blue-600 text-white font-medium py-2 rounded shadow-lg">
+            Open on ArXiv
+            </a>
+        )}
+      </div>
     </div>
   );
 };
