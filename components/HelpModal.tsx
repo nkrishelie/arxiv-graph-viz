@@ -28,6 +28,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="p-6 overflow-y-auto custom-scrollbar text-gray-300 space-y-6 leading-relaxed">
           
+          {/* Section 1: Intro */}
           <section>
             <h3 className="text-white font-bold text-lg mb-2">What is this?</h3>
             <p>
@@ -36,38 +37,52 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </p>
           </section>
 
-          {/* ГЛАВНОЕ ИЗМЕНЕНИЕ: СЕКЦИЯ ПРО МАТЕМАТИКУ */}
+          {/* Section 2: DATA SCOPE (ЭТУ СЕКЦИЮ МЫ ОБНОВИЛИ) */}
           <section className="bg-gray-800/50 p-4 rounded border-l-4 border-yellow-500">
-            <h3 className="text-white font-bold text-lg mb-2">⚠️ Important: Data Selection Bias</h3>
-            <p className="mb-3 text-sm">
-              This visualization represents <strong>science through the lens of Mathematics</strong>. It is NOT a complete map of the entire arXiv archive.
-            </p>
-            <ul className="list-disc pl-5 space-y-2 text-sm">
-              <li>
-                <span className="text-white font-semibold">Math-Centric View:</span> We exclusively fetch articles that have a <span className="text-yellow-400">Mathematical classification</span> (e.g., `math.AG`) or a strong cross-disciplinary link to Mathematics.
-              </li>
-              <li>
-                <span className="text-white font-semibold">Physics & CS:</span> Nodes for Physics or Computer Science appear here <em>only</em> if they intersect with Mathematics in our dataset. 
-                <br/>
-                <em className="text-gray-400">Do not interpret the size of the "Physics" cluster as a reflection of global publication volume. It only reflects the volume of <strong>mathematically related</strong> physics papers in this specific sample.</em>
-              </li>
-            </ul>
+            <h3 className="text-white font-bold text-lg mb-2">⚠️ Data Scope & Visualization</h3>
+            
+            <div className="mb-4">
+                <strong className="text-white text-sm uppercase tracking-wide block mb-1">
+                    The Two Numbers Explained:
+                </strong>
+                <p className="text-sm text-gray-300">
+                    You will see a counter like <span className="text-white font-mono">1.3k / 54k Papers</span>.
+                </p>
+                <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-gray-400">
+                    <li>
+                        <span className="text-white">~54k (Total Analyzed):</span> The total number of papers published in the <span className="text-yellow-400">last 365 days</span> that we analyzed to calculate the connection strength between disciplines.
+                    </li>
+                    <li>
+                        <span className="text-white">~1.3k (Displayed):</span> The "Top-15" most significant papers per category that are actually drawn on screen. We limit this number to keep the visualization fast and readable.
+                    </li>
+                </ul>
+            </div>
+
+            <div className="pt-2 border-t border-gray-700/50">
+                <p className="text-sm">
+                This visualization represents <strong>science through the lens of Mathematics</strong>.
+                </p>
+                <ul className="list-disc pl-5 mt-1 space-y-1 text-sm text-gray-400">
+                    <li>We exclusively fetch articles with a Mathematical classification or a strong link to Math.</li>
+                    <li>Nodes for Physics or CS appear only if they intersect with Mathematics in our dataset.</li>
+                </ul>
+            </div>
           </section>
 
+          {/* Section 3: Filtering */}
           <section>
             <h3 className="text-white font-bold text-lg mb-2">Filtering Rules</h3>
             <ul className="list-disc pl-5 space-y-2 text-sm">
               <li>
-                <span className="text-white font-semibold">Freshness:</span> We analyze only the most recent submissions (last 365 days) to show the current state of research.
+                <span className="text-white font-semibold">Freshness:</span> We analyze only the most recent submissions (last 365 days).
               </li>
               <li>
-                <span className="text-white font-semibold">The "Top 15" Limit:</span> To keep the graph readable, we select up to 15 representative papers per category.
-                <br/>
-                Priority is given to <strong>cross-disciplinary papers</strong> (those bridging multiple fields) and the most recently published ones.
+                <span className="text-white font-semibold">The "Top 15" Limit:</span> Priority is given to <strong>cross-disciplinary papers</strong> (those bridging multiple fields) and the most recently published ones.
               </li>
             </ul>
           </section>
 
+          {/* Section 4: Navigation */}
           <section>
             <h3 className="text-white font-bold text-lg mb-2">How to Navigate</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -91,6 +106,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </div>
           </section>
 
+          {/* Section 5: Legend */}
           <section>
             <h3 className="text-white font-bold text-lg mb-2">Visual Legend</h3>
             <ul className="space-y-2 text-sm">
