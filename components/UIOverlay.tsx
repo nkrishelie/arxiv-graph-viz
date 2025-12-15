@@ -113,7 +113,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
       <div className="p-6 overflow-y-auto custom-scrollbar">
         {selectedNode.description && (
-            <div className="text-sm text-gray-300 mb-5 leading-relaxed p-3 bg-black/20 rounded border border-white/5 max-h-40 overflow-y-auto">
+            <div className="text-sm text-gray-300 mb-5 leading-relaxed p-3 bg-black/20 rounded border border-white/5">
             <Latex>{selectedNode.description}</Latex>
             </div>
         )}
