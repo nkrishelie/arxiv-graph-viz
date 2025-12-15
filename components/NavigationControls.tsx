@@ -9,9 +9,9 @@ interface NavigationControlsProps {
   toggleFilter: (filter: string) => void;
   counts: {
     disciplines: number;
-    articles: number;
+    visibleArticles: number; // На экране
+    totalArticles: number;   // Всего в базе
   };
-  // НОВЫЙ ПРОП
   onOpenHelp: () => void;
 }
 
@@ -21,7 +21,7 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   activeFilters, 
   toggleFilter,
   counts,
-  onOpenHelp // Получаем функцию открытия
+  onOpenHelp 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<GraphNode[]>([]);
@@ -45,145 +45,118 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
     if (searchTerm.length < 2) { setSuggestions([]); return; }
     const lower = searchTerm.toLowerCase();
     
+    // Поиск
     const matches = nodes.filter(n => 
       n.label.toLowerCase().includes(lower) || 
       n.id.toLowerCase().includes(lower) ||
-      (n.authors && n.authors.some(a => a.toLowerCase().includes(lower))) ||
-      (n.description && n.description.toLowerCase().includes(lower))
+      (n.authors && n.authors.some(a => a.toLowerCase().includes(lower)))
     );
-
+    // Простая сортировка для поиска
     matches.sort((a, b) => {
-        const aLabel = a.label.toLowerCase();
-        const bLabel = b.label.toLowerCase();
-        const aIsDisc = a.type !== 'article';
-        const bIsDisc = b.type !== 'article';
-        
-        if (aIsDisc && !bIsDisc) return -1;
-        if (!aIsDisc && bIsDisc) return 1;
-        if (aLabel.startsWith(lower) && !bLabel.startsWith(lower)) return -1;
-        if (!aLabel.startsWith(lower) && bLabel.startsWith(lower)) return 1;
-        return 0;
+        const aLen = a.label.length;
+        const bLen = b.label.length;
+        return aLen - bLen;
     });
 
     setSuggestions(matches.slice(0, 10));
   }, [searchTerm, nodes]);
 
+  // Форматер для тысяч (54321 -> 54.3k)
+  const formatTotal = (num: number) => {
+      if (!num) return '0';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+      return num.toString();
+  };
+
   return (
     <>
-      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК */}
-      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-80 font-sans pointer-events-auto">
-        <div className="relative">
+      {/* ЛЕВАЯ ПАНЕЛЬ: ПОИСК + HELP */}
+      <div className="absolute top-4 left-4 z-50 w-[calc(100%-2rem)] md:w-96 font-sans pointer-events-auto flex items-start gap-2">
+        <button 
+            onClick={onOpenHelp}
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-gray-900/90 border border-yellow-500/50 text-yellow-500 rounded text-xl font-bold shadow-xl hover:bg-yellow-500 hover:text-gray-900 transition-all active:scale-95"
+        >
+            ?
+        </button>
+
+        <div className="relative flex-1">
             <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search..."
-                className="w-full bg-gray-900/90 border border-yellow-500/30 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-yellow-400 focus:bg-gray-900 transition-colors"
+                placeholder="Search category or paper..."
+                className="w-full bg-gray-900/90 border border-yellow-500/30 text-white px-4 py-3 rounded shadow-xl focus:outline-none focus:border-yellow-400 focus:bg-gray-900 transition-colors h-12"
             />
-            <span className="absolute right-3 top-3.5 text-gray-500">🔍</span>
+            {suggestions.length > 0 && (
+                <ul className="absolute top-14 left-0 w-full bg-gray-900 border border-gray-700 rounded shadow-2xl overflow-hidden max-h-[50vh] overflow-y-auto z-[60]">
+                {suggestions.map(node => (
+                    <li key={node.id} onClick={() => { onNodeSelect(node); setSearchTerm(''); setSuggestions([]); }} className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 flex items-center gap-3">
+                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getNodeColor(node) }}></span>
+                        <div className="flex-1 overflow-hidden"><div className="text-sm text-gray-200 truncate">{node.label}</div></div>
+                    </li>
+                ))}
+                </ul>
+            )}
         </div>
-
-        {suggestions.length > 0 && (
-          <ul className="mt-2 bg-gray-900 border border-gray-700 rounded shadow-2xl overflow-hidden max-h-[50vh] overflow-y-auto">
-            {suggestions.map(node => (
-              <li 
-                key={node.id} 
-                onClick={() => { onNodeSelect(node); setSearchTerm(''); setSuggestions([]); }}
-                className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 flex items-center gap-3"
-              >
-                <span 
-                    className="w-3 h-3 rounded-full flex-shrink-0 shadow-[0_0_5px_currentColor]" 
-                    style={{ backgroundColor: getNodeColor(node), color: getNodeColor(node) }}
-                ></span>
-                <div className="flex-1 overflow-hidden">
-                    <div className="text-sm text-gray-200 font-medium truncate">{node.label}</div>
-                    <div className="text-xs text-gray-500">
-                        {node.type === 'article' ? 'Paper' : 'Category'}
-                    </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ */}
+      {/* ПРАВАЯ ПАНЕЛЬ: ФИЛЬТРЫ + СТАТИСТИКА */}
       <div className="absolute top-20 md:top-4 right-4 z-50 flex flex-col items-end gap-2 md:h-[calc(100vh-2rem)] md:pointer-events-none">
         
-        {/* Кнопки управления (Тоггл + Help) */}
-        <div className="flex gap-2 pointer-events-auto">
-            {/* Кнопка HELP (Круглая) */}
-            <button 
-                onClick={onOpenHelp}
-                className="w-8 h-8 flex items-center justify-center bg-gray-800/90 border border-gray-600 text-yellow-500 rounded-full font-bold shadow-lg hover:bg-gray-700 hover:text-white transition-colors"
-                title="About / Help"
-            >
-                ?
-            </button>
-            
-            {/* Кнопка ТОГГЛ (Мобильная) */}
-            <button 
-                onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                className="bg-gray-800/90 border border-gray-600 text-white px-3 py-1 rounded text-xs font-bold uppercase tracking-wider shadow-lg hover:bg-gray-700 transition-colors md:hidden"
-            >
-                {isFiltersOpen ? 'Hide' : 'Filters'}
-            </button>
-        </div>
+        <button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="bg-gray-800/90 border border-gray-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-wider shadow-lg md:hidden pointer-events-auto">
+            {isFiltersOpen ? 'Hide Filters' : 'Show Filters'}
+        </button>
 
         <div className={`${isFiltersOpen ? 'flex' : 'hidden'} md:flex flex-col gap-4 w-64 transition-all md:h-full`}>
             
+            {/* Блок Фильтров */}
             <div className="bg-gray-900/80 backdrop-blur p-4 rounded-lg border border-gray-700 shadow-2xl overflow-hidden flex flex-col pointer-events-auto md:flex-1 max-h-[60vh] md:max-h-none">
                 <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-4 shrink-0">
-                    <h4 className="text-yellow-500 text-xs font-bold uppercase tracking-widest">
-                    Filters
-                    </h4>
-                    <button onClick={() => setIsFiltersOpen(false)} className="md:hidden text-gray-400 hover:text-white">✕</button>
+                    <h4 className="text-yellow-500 text-xs font-bold uppercase tracking-widest">Filters</h4>
+                    <button onClick={() => setIsFiltersOpen(false)} className="md:hidden text-gray-400">✕</button>
                 </div>
-                
                 <div className="overflow-y-auto custom-scrollbar flex-1 pr-1">
-                    <label className="flex items-center gap-3 text-sm text-white mb-4 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors">
-                    <input 
-                        type="checkbox" 
-                        checked={activeFilters.has('article')}
-                        onChange={() => toggleFilter('article')}
-                        className="w-4 h-4 accent-white cursor-pointer"
-                    />
-                    <span className="w-2 h-2 rounded-full bg-white"></span>
-                    Show Articles
-                    </label>
-
+                    <label className="flex items-center gap-3 text-sm text-white mb-4 cursor-pointer hover:bg-white/5 p-1 rounded"><input type="checkbox" checked={activeFilters.has('article')} onChange={() => toggleFilter('article')} className="w-4 h-4 accent-white"/><span className="w-2 h-2 rounded-full bg-white"></span>Show Articles</label>
                     {Object.entries(CATEGORY_COLORS).map(([key, color]) => (
-                    <label key={key} className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white hover:bg-white/5 p-1 rounded transition-colors">
-                        <input 
-                        type="checkbox" 
-                        checked={activeFilters.has(key)}
-                        onChange={() => toggleFilter(key)}
-                        className="w-4 h-4 rounded border-gray-500 cursor-pointer"
-                        style={{ accentColor: color }}
-                    />
-                    <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></span>
-                    {CATEGORY_LABELS[key] || key.toUpperCase()}
-                    </label>
+                    <label key={key} className="flex items-center gap-3 text-sm text-gray-300 mb-2 cursor-pointer hover:text-white hover:bg-white/5 p-1 rounded"><input type="checkbox" checked={activeFilters.has(key)} onChange={() => toggleFilter(key)} className="w-4 h-4 rounded border-gray-500" style={{ accentColor: color }}/><span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></span>{CATEGORY_LABELS[key] || key.toUpperCase()}</label>
                     ))}
                 </div>
             </div>
 
-            <div className="bg-gray-900/90 backdrop-blur p-3 rounded-lg border border-gray-700 shadow-xl text-center pointer-events-auto shrink-0">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Visible Nodes</div>
-                <div className="flex justify-around items-center text-sm">
-                    <div className="flex flex-col">
-                        <span className="text-white font-bold text-lg">{counts.disciplines}</span>
-                        <span className="text-gray-400 text-xs">Categories</span>
-                    </div>
-                    <div className="w-px h-8 bg-gray-700"></div>
-                    <div className="flex flex-col">
-                        <span className="text-white font-bold text-lg">{counts.articles}</span>
-                        <span className="text-gray-400 text-xs">Papers</span>
+{/* Блок Статистики */}
+            <div className="bg-gray-900/90 backdrop-blur p-4 rounded-lg border border-gray-700 shadow-xl pointer-events-auto shrink-0 flex flex-col gap-3">
+                
+                {/* Дисциплины */}
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider">Categories</span>
+                    <span className="text-white font-bold">{counts.disciplines}</span>
+                </div>
+
+                {/* Статьи */}
+                <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wider block mb-1">Papers (Last Year)</span>
+                    <div className="flex items-end justify-between">
+                        
+                        {/* 1. Отображаемые (Dynamic) */}
+                        <div className="flex flex-col">
+                             <span className="text-white font-bold text-xl leading-none">
+                                {counts.visibleArticles}
+                             </span>
+                             <span className="text-[10px] text-gray-500 mt-1">Displayed (Top-15)</span>
+                        </div>
+
+                        {/* 2. Всего в базе за год (Static Meta) */}
+                        <div className="text-right flex flex-col items-end">
+                             <span className="text-gray-400 font-medium text-sm leading-none border-b border-gray-700 pb-0.5 mb-1">
+                                {formatTotal(counts.totalArticles)}
+                             </span>
+                             <span className="text-[10px] text-gray-500">Total Analyzed</span>
+                        </div>
                     </div>
                 </div>
+
             </div>
         </div>
-
       </div>
     </>
   );

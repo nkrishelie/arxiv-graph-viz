@@ -34,4 +34,7 @@ export interface GraphLink {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
+  meta?: {
+    total_papers: number; // Теперь это число статей за 365 дней
+  };
 }
