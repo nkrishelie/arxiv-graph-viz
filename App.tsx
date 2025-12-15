@@ -37,13 +37,27 @@ const App: React.FC = () => {
   // <-- REACT 18 TRANSITION
   const [isPending, startTransition] = useTransition(); 
 
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(
-    new Set(['math', 'article']) 
-  );
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     getGraphData().then((data) => {
       setRawData(data);
+
+      // --- АВТО-ОПРЕДЕЛЕНИЕ АКТИВНЫХ ФИЛЬТРОВ ---
+      const availableFilters = new Set<string>();
+      
+      data.nodes.forEach(node => {
+        // Если это НЕ статья — определяем её домен и включаем фильтр
+        if (node.type !== 'article') {
+            const domain = getDomain(node.id);
+            if (domain) availableFilters.add(domain);
+        }
+      });
+      
+      // Применяем найденные категории (статей там нет, значит они выключены)
+      setActiveFilters(availableFilters);
+      // ------------------------------------------
+
       let max = 0;
       data.links.forEach(l => { if ((l.val || 0) > max) max = l.val || 0; });
       setMaxLinkVal(max || 1);
