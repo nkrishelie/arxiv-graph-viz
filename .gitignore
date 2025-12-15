@@ -1,7 +1,23 @@
+# Зависимости и системные файлы
 node_modules/
-__pycache__/
-*.csv
-.env
 .DS_Store
-.ipynb
-.sh
+dist/
+build/
+
+# Локальные скрипты (ЧТОБЫ НЕ УЛЕТЕЛИ В РЕПО)
+arxiv_etl.py
+update_graph.sh
+
+# Секреты и ключи
+*.pem
+*.key
+
+# Игнорируем ВСЕ json файлы по умолчанию (так безопаснее для ключей)
+*.json
+
+# НО разрешаем эти конкретные файлы (они нужны сайту)
+!graph_data.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.node.json
