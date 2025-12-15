@@ -1,33 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useTransition } from 'react'; // <-- Добавили useTransition
 import { GraphViewer } from './components/GraphViewer';
 import { UIOverlay } from './components/UIOverlay';
 import { NavigationControls } from './components/NavigationControls';
-import { HelpModal } from './components/HelpModal'; // <-- 1. Импорт нового компонента
+import { HelpModal } from './components/HelpModal';
 import { getGraphData } from './services/dataService';
 import { GraphData, GraphNode } from './types';
 import { CATEGORY_COLORS } from './constants';
 
-// Функция для определения категории (чтобы работали цвета и фильтры)
+// ... (функция getDomain без изменений) ...
 const getDomain = (nodeId: string): string => {
   const lowerId = nodeId.toLowerCase();
-  
   if (lowerId.includes('quant-ph')) return 'quant-ph';
   if (lowerId.includes('astro-ph')) return 'astro-ph';
   if (lowerId.includes('gr-qc')) return 'gr-qc';
   if (lowerId.includes('cond-mat')) return 'cond-mat';
   if (lowerId.includes('hep')) return 'hep-th';
-
   const parts = nodeId.split('.');
   const prefix = isNaN(Number(parts[0])) ? parts[0] : 'other';
-
   if (prefix === 'math') return 'math';
   if (prefix === 'cs') return 'cs';
   if (prefix === 'stat') return 'stat';
   if (prefix === 'eess') return 'eess';
-
   if (prefix === 'physics' || lowerId.includes('ph')) return 'physics';
   if (CATEGORY_COLORS[prefix]) return prefix;
-
   return 'other';
 };
 
@@ -37,9 +32,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
   const [maxLinkVal, setMaxLinkVal] = useState(1);
-  
-  // <-- 2. Стейт для открытия окна справки
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // <-- REACT 18 TRANSITION
+  const [isPending, startTransition] = useTransition(); 
 
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['math', 'article']) 
@@ -55,11 +51,18 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // <-- ОБНОВЛЕННАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ
   const toggleFilter = (filter: string) => {
-    const newSet = new Set(activeFilters);
-    if (newSet.has(filter)) newSet.delete(filter);
-    else newSet.add(filter);
-    setActiveFilters(newSet);
+    // startTransition позволяет интерфейсу (галочкам) обновиться мгновенно,
+    // а тяжелый пересчет графа (filteredData) откладывает на долю секунды
+    startTransition(() => {
+        setActiveFilters(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(filter)) newSet.delete(filter);
+            else newSet.add(filter);
+            return newSet;
+        });
+    });
   };
 
   const isCategoryVisible = (node: GraphNode, filters: Set<string>) => {
@@ -106,25 +109,16 @@ const App: React.FC = () => {
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
-  // <-- 3. Правильный подсчет статистики
   const visibleCounts = useMemo(() => {
     let disciplines = 0;
     let visibleArticles = 0;
-    
-    // Считаем то, что на экране (зависит от фильтров)
     filteredData.nodes.forEach(n => {
         if (n.type === 'article') visibleArticles++;
         else disciplines++;
     });
-
-    // Берем "Всего в базе" из файла JSON (посчитано питоном)
     const totalArticles = rawData?.meta?.total_papers || 0;
 
-    return { 
-        disciplines, 
-        visibleArticles, 
-        totalArticles 
-    };
+    return { disciplines, visibleArticles, totalArticles };
   }, [filteredData, rawData]);
 
   const neighbors = useMemo(() => {
@@ -156,15 +150,25 @@ const App: React.FC = () => {
         activeFilters={activeFilters}
         toggleFilter={toggleFilter}
         counts={visibleCounts} 
-        onOpenHelp={() => setIsHelpOpen(true)} // <-- Передаем команду "Открыть помощь"
+        onOpenHelp={() => setIsHelpOpen(true)} 
       />
 
-      <GraphViewer 
-        data={filteredData}
-        onNodeClick={handleNodeSelect}
-        focusNode={focusNode}
-        maxLinkVal={maxLinkVal}
-      />
+      {/* Контейнер графа с эффектом "задумывания" */}
+      <div className={`w-full h-full transition-opacity duration-300 ${isPending ? 'opacity-50 blur-sm scale-[0.99]' : 'opacity-100'}`}>
+          <GraphViewer 
+            data={filteredData}
+            onNodeClick={handleNodeSelect}
+            focusNode={focusNode}
+            maxLinkVal={maxLinkVal}
+          />
+      </div>
+      
+      {/* Спиннер загрузки при пересчете */}
+      {isPending && (
+        <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+            <div className="text-yellow-500 font-bold text-xl drop-shadow-md animate-pulse">Calculating Physics...</div>
+        </div>
+      )}
       
       <UIOverlay 
         selectedNode={selectedNode} 
@@ -173,7 +177,6 @@ const App: React.FC = () => {
         onNodeClick={handleNodeSelect} 
       />
 
-      {/* <-- 4. Рендерим само модальное окно */}
       <HelpModal 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
