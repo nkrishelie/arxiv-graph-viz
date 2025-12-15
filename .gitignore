@@ -7,6 +7,8 @@ build/
 # Локальные скрипты (ЧТОБЫ НЕ УЛЕТЕЛИ В РЕПО)
 arxiv_etl.py
 update_graph.sh
+.py
+.ipynb
 
 # Секреты и ключи
 *.pem
