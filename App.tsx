@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { GraphViewer } from './components/GraphViewer';
 import { UIOverlay } from './components/UIOverlay';
 import { NavigationControls } from './components/NavigationControls';
-import { HelpModal } from './components/HelpModal'; // Импорт нового компонента
+import { HelpModal } from './components/HelpModal'; // <-- 1. Импорт нового компонента
 import { getGraphData } from './services/dataService';
 import { GraphData, GraphNode } from './types';
 import { CATEGORY_COLORS } from './constants';
 
+// Функция для определения категории (чтобы работали цвета и фильтры)
 const getDomain = (nodeId: string): string => {
   const lowerId = nodeId.toLowerCase();
   
@@ -36,7 +37,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [focusNode, setFocusNode] = useState<GraphNode | null>(null);
   const [maxLinkVal, setMaxLinkVal] = useState(1);
-  // Состояние для Help Modal
+  
+  // <-- 2. Стейт для открытия окна справки
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
@@ -104,15 +106,26 @@ const App: React.FC = () => {
     return { nodes: activeNodes, links: activeLinks };
   }, [rawData, activeFilters]);
 
+  // <-- 3. Правильный подсчет статистики
   const visibleCounts = useMemo(() => {
     let disciplines = 0;
-    let articles = 0;
+    let visibleArticles = 0;
+    
+    // Считаем то, что на экране (зависит от фильтров)
     filteredData.nodes.forEach(n => {
-        if (n.type === 'article') articles++;
+        if (n.type === 'article') visibleArticles++;
         else disciplines++;
     });
-    return { disciplines, articles };
-  }, [filteredData]);
+
+    // Берем "Всего в базе" из файла JSON (посчитано питоном)
+    const totalArticles = rawData?.meta?.total_papers || 0;
+
+    return { 
+        disciplines, 
+        visibleArticles, 
+        totalArticles 
+    };
+  }, [filteredData, rawData]);
 
   const neighbors = useMemo(() => {
     if (!selectedNode || !rawData) return [];
@@ -133,7 +146,7 @@ const App: React.FC = () => {
     setFocusNode(node);
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading...</div>;
+  if (loading) return <div className="flex justify-center items-center h-screen bg-[#000011] text-white">Loading ArXiv Universe...</div>;
 
   return (
     <div className="relative w-full h-screen bg-[#000011] overflow-hidden">
@@ -143,7 +156,7 @@ const App: React.FC = () => {
         activeFilters={activeFilters}
         toggleFilter={toggleFilter}
         counts={visibleCounts} 
-        onOpenHelp={() => setIsHelpOpen(true)} // Передаем
+        onOpenHelp={() => setIsHelpOpen(true)} // <-- Передаем команду "Открыть помощь"
       />
 
       <GraphViewer 
@@ -160,7 +173,7 @@ const App: React.FC = () => {
         onNodeClick={handleNodeSelect} 
       />
 
-      {/* Модальное окно */}
+      {/* <-- 4. Рендерим само модальное окно */}
       <HelpModal 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
