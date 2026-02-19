@@ -76,6 +76,9 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   const relatedDisciplines = neighbors.filter(
     n => n.type !== 'article'
   );
+  const articlesFromCategory = neighbors.filter(
+    n => n.type === 'article'
+  );
 
   return (
     <div 
@@ -149,6 +152,38 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                     </li>
                   );
                 })}
+            </ul>
+            </div>
+        )}
+
+        {articlesFromCategory.length > 0 && selectedNode.type !== 'article' && (
+            <div className="mt-4 border-t border-gray-800 pt-4">
+            <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">
+                Papers in {selectedNode.label} ({articlesFromCategory.length})
+            </h3>
+            <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {articlesFromCategory.map(n => (
+                    <li
+                        key={n.id}
+                        onClick={() => onNodeClick(n)}
+                        className="text-sm bg-gray-800/40 hover:bg-white/5 border border-transparent p-2 rounded cursor-pointer transition-all group"
+                    >
+                        <div className="truncate font-medium text-gray-300 group-hover:text-white transition-colors">
+                            <Latex>{n.label}</Latex>
+                        </div>
+                        {n.url && (
+                            <a
+                                href={n.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="text-xs text-blue-400 hover:text-blue-300 mt-1 block truncate"
+                            >
+                                Open on ArXiv →
+                            </a>
+                        )}
+                    </li>
+                ))}
             </ul>
             </div>
         )}
