@@ -45,12 +45,15 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
     if (searchTerm.length < 2) { setSuggestions([]); return; }
     const lower = searchTerm.toLowerCase();
     
-    // Поиск
-    const matches = nodes.filter(n => 
-      n.label.toLowerCase().includes(lower) || 
-      n.id.toLowerCase().includes(lower) ||
-      (n.authors && n.authors.some(a => a.toLowerCase().includes(lower)))
-    );
+    // Поиск: по названию, id, авторам и описанию категории (например "model theory" → math.LO)
+    const matches = nodes.filter(n => {
+      if (n.label.toLowerCase().includes(lower)) return true;
+      if (n.id.toLowerCase().includes(lower)) return true;
+      if (n.authors && n.authors.some(a => a.toLowerCase().includes(lower))) return true;
+      const desc = (n as any).description;
+      if (typeof desc === 'string' && desc.toLowerCase().includes(lower)) return true;
+      return false;
+    });
     // Простая сортировка для поиска
     matches.sort((a, b) => {
         const aLen = a.label.length;
